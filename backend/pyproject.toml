@@ -1,0 +1,16 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "fastapi>=0.136.1",
+    "httpx>=0.28.1",
+    "pillow>=12.2.0",
+    "pydantic-settings>=2.14.1",
+    "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.28",
+    "sqlmodel>=0.0.38",
+    "uvicorn>=0.47.0",
+]
