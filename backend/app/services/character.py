@@ -28,9 +28,16 @@ REFERENCE_ROLES_BY_PRIORITY = [
 INITIAL_REFERENCE_ROLE = "FACE_FRONT"
 
 
-def _build_base_prompt(persona: dict) -> str:
+def _build_base_prompt(persona: dict, has_anchor: bool = False) -> str:
+    if has_anchor:
+        intro = (
+            "Generate a photorealistic portrait of the SAME person shown in the reference images. "
+            "Maintain exact same face, skin tone, hair color, hair style, and features."
+        )
+    else:
+        intro = "Generate a photorealistic portrait of a virtual influencer."
     parts = [
-        "Generate a photorealistic portrait of a virtual influencer.",
+        intro,
         f"Age: {persona.get('age', '20s')}.",
         f"Heritage/ethnicity: {persona.get('heritage', '')}.",
         f"Appearance: {persona.get('appearance', '')}.",
@@ -41,6 +48,28 @@ def _build_base_prompt(persona: dict) -> str:
         "High quality, editorial magazine style photo.",
     ]
     return " ".join(p for p in parts if p)
+
+
+def _load_anchor_references(anchor_character_id: str | None) -> list[dict]:
+    """Return reference dicts (role, image_id) for the anchor character's
+    base + saved references, de-duped. Empty list if no anchor."""
+    if not anchor_character_id:
+        return []
+    with Session(engine) as session:
+        anchor = session.get(Character, anchor_character_id)
+        if not anchor:
+            return []
+        refs: list[dict] = [
+            {"role": "anchor_BASE", "image_id": anchor.base_image_id}
+        ]
+        seen = {anchor.base_image_id}
+        for ref in anchor.references:
+            if ref.image_id in seen:
+                continue
+            refs.append({"role": f"anchor_{ref.role}", "image_id": ref.image_id})
+            seen.add(ref.image_id)
+        # Cap at 8 — providers limit total refs per call.
+        return refs[:8]
 
 
 def _build_reference_prompt(persona: dict, role: str) -> str:
@@ -109,6 +138,7 @@ def enqueue_character_creation(
     persona: dict,
     provider_name: str,
     reference_count: int = 1,
+    anchor_character_id: str | None = None,
 ) -> str:
     reference_count = _clamp_reference_count(reference_count)
     assert_daily_budget_available(reference_count * 0.02)
@@ -119,6 +149,7 @@ def enqueue_character_creation(
                 "name": name,
                 "persona": persona,
                 "reference_count": reference_count,
+                "anchor_character_id": anchor_character_id,
             },
             provider=provider_name,
             model=f"{provider_name}-image",
@@ -136,6 +167,7 @@ async def create_character(
     provider_name: str,
     job_id: str | None = None,
     reference_count: int = 1,
+    anchor_character_id: str | None = None,
 ) -> dict | None:
     reference_count = _clamp_reference_count(reference_count)
     provider = get_provider(provider_name)
@@ -153,10 +185,17 @@ async def create_character(
             session.commit()
 
     try:
-        # Step 1: Generate base image (text-to-image)
-        base_prompt = _build_base_prompt(persona)
+        # Step 1: Generate base image. With an anchor, we use the anchor's
+        # existing images as references so the new image stays the same person.
+        anchor_refs = _load_anchor_references(anchor_character_id)
+        base_prompt = _build_base_prompt(persona, has_anchor=bool(anchor_refs))
         base_result = await provider.generate(
-            ImageGenRequest(prompt=base_prompt, aspect_ratio="1:1", quality="low")
+            ImageGenRequest(
+                prompt=base_prompt,
+                references=anchor_refs,
+                aspect_ratio="1:1",
+                quality="low",
+            )
         )
         base_asset = base_result.image_assets[0]
 

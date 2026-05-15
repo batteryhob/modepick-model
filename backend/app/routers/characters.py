@@ -42,6 +42,7 @@ def create(req: CharacterCreateRequest, background_tasks: BackgroundTasks):
             req.persona,
             req.provider,
             req.reference_count,
+            anchor_character_id=req.anchor_character_id,
         )
         background_tasks.add_task(
             create_character,
@@ -50,6 +51,7 @@ def create(req: CharacterCreateRequest, background_tasks: BackgroundTasks):
             req.provider,
             job_id,
             req.reference_count,
+            req.anchor_character_id,
         )
         return {"job_id": job_id, "status": "pending"}
     except ValueError as e:

@@ -38,6 +38,7 @@ export default function CharactersPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createJobId, setCreateJobId] = useState<string | null>(null);
+  const [anchorCharacterId, setAnchorCharacterId] = useState<string | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [expandJobId, setExpandJobId] = useState<string | null>(null);
   const [expandTargetCount, setExpandTargetCount] = useState<number>(0);
@@ -117,6 +118,7 @@ export default function CharactersPage() {
       setName("");
       setPersona({});
       setReferenceCount(1);
+      setAnchorCharacterId(null);
     }
 
     if (createJob.status === "failed") {
@@ -131,6 +133,7 @@ export default function CharactersPage() {
     setName("");
     setPersona({});
     setReferenceCount(1);
+    setAnchorCharacterId(null);
     setCreateError(null);
     setShowCreate(true);
   };
@@ -139,10 +142,15 @@ export default function CharactersPage() {
     setName(char.name);
     setPersona((char.persona as unknown as Record<string, string>) || {});
     setReferenceCount(char.references?.length || 1);
+    setAnchorCharacterId(char.id);
     setCreateError(null);
     setSelectedCharacterId(null);
     setShowCreate(true);
   };
+
+  const anchorCharacter: Character | null = anchorCharacterId
+    ? characters.find((c: Character) => c.id === anchorCharacterId) ?? null
+    : null;
 
   const handleCreate = async () => {
     if (!name.trim() || creating) return;
@@ -154,6 +162,7 @@ export default function CharactersPage() {
         persona,
         provider,
         reference_count: referenceCount,
+        anchor_character_id: anchorCharacterId,
       });
       setCreateJobId(result.job_id);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -316,6 +325,28 @@ export default function CharactersPage() {
                       </div>
                     )}
 
+                    {/* Persona */}
+                    {(() => {
+                      const persona = (selectedCharacter.persona as unknown as Record<string, string>) || {};
+                      const filled = PERSONA_FIELDS.filter((f) => (persona[f.key] || "").trim());
+                      if (filled.length === 0) return null;
+                      return (
+                        <div className="mb-5">
+                          <p className="text-xs font-mono text-gray-400 mb-2">페르소나</p>
+                          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                            {filled.map((f) => (
+                              <div key={f.key} className="min-w-0">
+                                <dt className="text-[11px] text-gray-400">{f.label}</dt>
+                                <dd className="text-sm text-gray-800 truncate" title={persona[f.key]}>
+                                  {persona[f.key]}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      );
+                    })()}
+
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                       <div className="border rounded-lg overflow-hidden bg-white">
                         <div className="aspect-square bg-gray-50">
@@ -354,9 +385,26 @@ export default function CharactersPage() {
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">새 캐릭터</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              {anchorCharacterId ? "다시 만들기" : "새 캐릭터"}
+            </h3>
+            {anchorCharacter && (
+              <div className="mb-4 flex items-center gap-2 p-2 rounded-md bg-gray-50 border">
+                <img
+                  src={imageUrl(anchorCharacter.base_image_id)}
+                  alt={anchorCharacter.name}
+                  className="w-8 h-8 rounded object-cover"
+                />
+                <div className="text-xs text-gray-600 leading-snug">
+                  <p>
+                    <span className="font-medium">{anchorCharacter.name}</span> 의 이미지를 레퍼런스로 사용합니다
+                  </p>
+                  <p className="text-gray-400">같은 인물의 새 이미지가 생성됩니다</p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>

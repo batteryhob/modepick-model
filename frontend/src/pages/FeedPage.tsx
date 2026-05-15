@@ -200,40 +200,52 @@ function CarouselViewer({
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={onClose}
     >
-      {/* Prev arrow */}
-      {showNav && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            goPrev();
-          }}
-          disabled={!hasPrev}
-          aria-label="이전"
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-gray-900 text-lg z-10"
-        >
-          ‹
-        </button>
-      )}
-
       <div
-        className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden"
+        className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col md:flex-row overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Image */}
-        <div className="md:w-2/3 bg-black flex items-center justify-center min-h-[300px] md:min-h-0">
+        {/* Image — capped at ~half viewport on mobile so the info panel
+            below has room; full modal height on md+ where layout is row. */}
+        <div className="relative md:w-2/3 bg-black flex items-center justify-center flex-shrink-0">
           <img
             src={imageUrl(post.image_id)}
             alt=""
-            className="max-w-full max-h-[90vh] object-contain"
+            className="max-w-full max-h-[50vh] md:max-h-[90vh] object-contain"
           />
+          {showNav && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                disabled={!hasPrev}
+                aria-label="이전"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center text-white text-lg backdrop-blur-sm transition-colors"
+              >
+                ‹
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNext();
+                }}
+                disabled={!hasNext}
+                aria-label="다음"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center text-white text-lg backdrop-blur-sm transition-colors"
+              >
+                ›
+              </button>
+            </>
+          )}
         </div>
 
-        {/* Info side panel */}
-        <div className="md:w-1/3 flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b">
+        {/* Info side panel — takes remaining height on mobile, fixed 1/3 on md+ */}
+        <div className="md:w-1/3 flex flex-col flex-1 min-h-0">
+          <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
             <p className="text-xs text-gray-400">
               {new Date(post.created_at).toLocaleDateString()}
             </p>
@@ -273,7 +285,7 @@ function CarouselViewer({
               )}
           </div>
 
-          <div className="border-t p-3 flex items-center justify-between gap-2">
+          <div className="border-t p-3 flex items-center justify-between gap-2 flex-shrink-0">
             {showNav ? (
               <span className="text-xs text-gray-500">
                 {index + 1} / {posts.length}
@@ -300,21 +312,6 @@ function CarouselViewer({
           </div>
         </div>
       </div>
-
-      {/* Next arrow */}
-      {showNav && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            goNext();
-          }}
-          disabled={!hasNext}
-          aria-label="다음"
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-gray-900 text-lg z-10"
-        >
-          ›
-        </button>
-      )}
     </div>
   );
 }
