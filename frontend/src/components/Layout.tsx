@@ -2,10 +2,10 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const tabs = [
   { to: "/feed", label: "피드" },
-  { to: "/composer", label: "합성" },
   { to: "/characters", label: "캐릭터" },
   { to: "/wardrobe", label: "옷장" },
   { to: "/mood", label: "무드" },
+  { to: "/composer", label: "합성" },
   { to: "/log", label: "로그" },
 ];
 
