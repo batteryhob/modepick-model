@@ -92,15 +92,17 @@ export default function FeedPage() {
 
       {isLoading && <p className="text-gray-500">로딩 중...</p>}
 
-      {/* Instagram-style profile grid: 3 columns, ~1px gaps, square-ish tiles
-          but using 4:5 to match the generated portrait aspect. */}
-      <div className="grid grid-cols-3 gap-[2px] sm:gap-1 max-w-3xl mx-auto">
+      {/* Instagram-style profile grid: 3 on mobile, more cols on wider
+          screens so the page doesn't leave huge empty gutters.
+          `min-w-0` on each cell is critical — without it, intrinsic image
+          width (1024px) pushes the grid wider than the viewport on phones. */}
+      <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-[2px] sm:gap-1">
         {posts.map((post: FeedPost) => {
           const selected = selectedIds.has(post.id);
           return (
             <div
               key={post.id}
-              className="relative group aspect-[4/5] bg-gray-100 overflow-hidden cursor-pointer"
+              className="relative group min-w-0 aspect-[4/5] bg-gray-100 overflow-hidden cursor-pointer"
               onClick={() => openSingle(post)}
             >
               <img
