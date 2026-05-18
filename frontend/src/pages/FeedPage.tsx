@@ -205,6 +205,10 @@ function CarouselViewer({
       slots: post.slots,
       scene: post.scene,
       params: post.compose_params,
+      // Anchor the next compose on this exact post's image so the user
+      // lands on /composer ready to generate a variation of THIS result,
+      // not whatever the source compose originally anchored on.
+      anchorImageId: post.image_id,
     });
     onClose();
     navigate("/composer");

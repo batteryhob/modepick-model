@@ -14,6 +14,10 @@ interface HydrationInput {
   slots: ComposerSlots;
   scene: string;
   params: ComposeParamsSnapshot;
+  // The feed post's own image_id. Used as the anchor so the user lands
+  // on /composer ready to make a variation of THIS exact result, not
+  // whatever the original compose had anchored at the time.
+  anchorImageId: string;
 }
 
 interface ComposerState {
@@ -98,7 +102,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setSeason: (season) => set({ season }),
   setTimeOfDay: (time) => set({ timeOfDay: time }),
   setAnchorImageId: (id) => set({ anchorImageId: id }),
-  hydrateFromFeedPost: ({ characterId, slots, scene, params }) =>
+  hydrateFromFeedPost: ({ characterId, slots, scene, params, anchorImageId }) =>
     set({
       activeCharacterId: characterId,
       selectedReferenceIds: params.character_reference_ids ?? [],
@@ -109,7 +113,11 @@ export const useComposerStore = create<ComposerState>((set) => ({
       weather: params.weather ?? "AUTO",
       season: params.season ?? "AUTO",
       timeOfDay: params.time_of_day ?? "AUTO",
-      anchorImageId: params.anchor_image_id ?? null,
+      // Anchor the next compose on the feed post's own image so the user
+      // is set up to make a variation of this exact result. (We ignore
+      // params.anchor_image_id — that was the anchor at the time the
+      // post was saved, which is now history.)
+      anchorImageId,
       quality: params.quality ?? "medium",
     }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),
