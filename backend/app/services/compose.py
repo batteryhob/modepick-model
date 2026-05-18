@@ -11,6 +11,7 @@ from app.models import (
     GenerationJob,
     MoodReference,
     WardrobeItem,
+    WorldLocation,
 )
 from app.services.cost_guard import assert_daily_budget_available
 from app.services.image_gen.base import ImageGenRequest
@@ -299,6 +300,8 @@ def _build_compose_prompt(
     char_ref_positions: list[int],
     product_ref_positions: dict[str, list[int]],
     mood_ref_position: int | None,
+    location: WorldLocation | None,
+    location_ref_positions: list[int],
     view: str,
     capture_style: str,
 ) -> str:
@@ -345,6 +348,22 @@ def _build_compose_prompt(
             f"Apply the lighting, color grading, and atmosphere from reference image {mood_ref_position}. "
             "Do NOT copy the people or objects from this reference, only the mood/lighting."
         )
+
+    if location and location_ref_positions:
+        if len(location_ref_positions) == 1:
+            lines.append(
+                f"Setting: the scene takes place at the location shown in reference image "
+                f"{location_ref_positions[0]} — render this exact place (architecture, "
+                "room features, wall colors, environmental details) consistently."
+            )
+        else:
+            ref_nums = ", ".join(str(n) for n in location_ref_positions)
+            lines.append(
+                f"Setting: the scene takes place at the location shown in reference images "
+                f"{ref_nums} (same physical place from multiple angles). Render the same "
+                "architecture, room features, wall colors, lighting, and environmental "
+                "details consistently — this is a recurring place the subject frequents."
+            )
 
     if scene:
         # Free-form prompt addition from the user (scene description, extra
@@ -458,6 +477,20 @@ def _prepare_compose_inputs(
             mood_ref_position = len(references) + 1
             references.append({"role": "mood", "image_id": mood.image_id})
 
+    # 4.5. World location reference — one location contributes all its images
+    location: WorldLocation | None = None
+    location_ref_positions: list[int] = []
+    location_id = slots.get("location")
+    if location_id:
+        location = session.get(WorldLocation, location_id)
+        if location and location.images:
+            for img in location.images:
+                pos = len(references) + 1
+                references.append(
+                    {"role": f"location_{img.sort_order}", "image_id": img.image_id}
+                )
+                location_ref_positions.append(pos)
+
     # 5. Check reference limit
     limit = REFERENCE_LIMITS.get(provider_name, 16)
     if len(references) > limit:
@@ -478,6 +511,8 @@ def _prepare_compose_inputs(
         char_ref_positions,
         product_ref_positions,
         mood_ref_position,
+        location,
+        location_ref_positions,
         view,
         capture_style,
     )

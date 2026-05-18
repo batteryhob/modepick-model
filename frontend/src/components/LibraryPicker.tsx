@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { imageUrl } from "@/api/client";
 import IconButton from "@/components/IconButton";
-import type { Character, WardrobeItem, MoodReference } from "@/types";
+import type { Character, WardrobeItem, MoodReference, WorldLocation } from "@/types";
 
 interface Props {
-  type: string; // "character" | wardrobe category | "mood"
+  type: string; // "character" | wardrobe category | "mood" | "world"
   characters: Character[];
   wardrobeItems: WardrobeItem[];
   moods: MoodReference[];
+  locations: WorldLocation[];
   // For character: id is the character id, referenceIds is the explicit
   // list the user chose (may be empty — backend falls back to FACE_FRONT).
-  // For wardrobe / mood: referenceIds is omitted.
+  // For wardrobe / mood / world: referenceIds is omitted.
   onSelect: (id: string, referenceIds?: string[]) => void;
   onClose: () => void;
   // When a character is already active, pass its id + currently selected refs
@@ -32,6 +33,7 @@ export default function LibraryPicker({
   characters,
   wardrobeItems,
   moods,
+  locations,
   onSelect,
   onClose,
   initialCharacterId = null,
@@ -88,6 +90,15 @@ export default function LibraryPicker({
       name: m.name,
       image_id: m.image_id,
       sub: m.tags,
+    }));
+  } else if (type === "world") {
+    title = "세계관 (장소) 선택";
+    items = locations.map((loc) => ({
+      id: loc.id,
+      name: loc.name,
+      image_id: loc.images[0]?.image_id ?? null,
+      sub: loc.notes || undefined,
+      imageCount: loc.images.length,
     }));
   } else {
     title = `${type.toUpperCase()} 선택`;

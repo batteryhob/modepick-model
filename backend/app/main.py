@@ -6,7 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import create_db_and_tables
-from app.routers import characters, compose, feed, health, images, jobs, mood, wardrobe
+from app.routers import (
+    characters,
+    compose,
+    feed,
+    health,
+    images,
+    jobs,
+    mood,
+    wardrobe,
+    world,
+)
 from app.services.storage import storage_service
 
 
@@ -43,6 +53,7 @@ app.include_router(images.router)
 app.include_router(characters.router)
 app.include_router(wardrobe.router)
 app.include_router(mood.router)
+app.include_router(world.router)
 app.include_router(compose.router)
 app.include_router(feed.router)
 app.include_router(jobs.router)

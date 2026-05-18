@@ -30,6 +30,7 @@ const emptySlots: ComposerSlots = {
   bag: null,
   shoes: null,
   mood: null,
+  location: null,
 };
 
 export const useComposerStore = create<ComposerState>((set) => ({

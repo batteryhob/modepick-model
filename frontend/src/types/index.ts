@@ -71,6 +71,20 @@ export interface MoodReference {
   created_at: string;
 }
 
+export interface WorldLocationImage {
+  id: string;
+  image_id: string;
+  sort_order: number;
+}
+
+export interface WorldLocation {
+  id: string;
+  name: string;
+  notes: string | null;
+  created_at: string;
+  images: WorldLocationImage[];
+}
+
 export interface GenerationJob {
   id: string;
   type: string;
@@ -125,6 +139,7 @@ export interface ComposerSlots {
   bag: string | null;
   shoes: string | null;
   mood: string | null;
+  location: string | null;
 }
 
 export type ComposeView =

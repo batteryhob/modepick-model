@@ -5,6 +5,7 @@ const tabs = [
   { to: "/characters", label: "캐릭터" },
   { to: "/wardrobe", label: "옷장" },
   { to: "/mood", label: "무드" },
+  { to: "/world", label: "세계관" },
   { to: "/composer", label: "합성" },
   { to: "/log", label: "로그" },
 ];

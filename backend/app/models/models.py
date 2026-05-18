@@ -105,6 +105,43 @@ class MoodReference(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class WorldLocation(SQLModel, table=True):
+    """A recurring place in the character's world — their home, regular
+    cafe, frequented street, etc. Each location has 1..N reference images
+    so the model can render the SAME place consistently across feed posts.
+    """
+
+    __tablename__ = "world_location"
+
+    id: str = Field(default_factory=gen_uuid, primary_key=True)
+    name: str
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+    images: list["WorldLocationImage"] = Relationship(
+        back_populates="location",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "order_by": "WorldLocationImage.sort_order",
+        },
+    )
+
+
+class WorldLocationImage(SQLModel, table=True):
+    __tablename__ = "world_location_image"
+    __table_args__ = (
+        Index("ix_worldlocationimage_loc_order", "location_id", "sort_order"),
+    )
+
+    id: str = Field(default_factory=gen_uuid, primary_key=True)
+    location_id: str = Field(foreign_key="world_location.id")
+    image_id: str = Field(foreign_key="image_asset.id")
+    sort_order: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utcnow)
+
+    location: WorldLocation = Relationship(back_populates="images")
+
+
 class GenerationJob(SQLModel, table=True):
     __tablename__ = "generation_job"
 

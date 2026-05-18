@@ -7,6 +7,8 @@ from app.models.models import (
     MoodReference,
     WardrobeItem,
     WardrobeItemImage,
+    WorldLocation,
+    WorldLocationImage,
     utcnow,
 )
 
@@ -19,5 +21,7 @@ __all__ = [
     "MoodReference",
     "WardrobeItem",
     "WardrobeItemImage",
+    "WorldLocation",
+    "WorldLocationImage",
     "utcnow",
 ]

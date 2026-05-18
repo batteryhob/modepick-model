@@ -81,6 +81,32 @@ export const api = {
       request<void>(`/api/mood/${id}`, { method: "DELETE" }),
   },
 
+  world: {
+    list: () => request<{ items: WorldLocation[]; total: number }>("/api/world"),
+    create: (formData: FormData) =>
+      request<WorldLocation>("/api/world", {
+        method: "POST",
+        body: formData,
+      }),
+    addImage: (locationId: string, formData: FormData) =>
+      request<WorldLocation>(`/api/world/${locationId}/images`, {
+        method: "POST",
+        body: formData,
+      }),
+    removeImage: (locationId: string, imageRecordId: string) =>
+      request<void>(`/api/world/${locationId}/images/${imageRecordId}`, {
+        method: "DELETE",
+      }),
+    update: (id: string, data: Partial<Pick<WorldLocation, "name" | "notes">>) =>
+      request<WorldLocation>(`/api/world/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/api/world/${id}`, { method: "DELETE" }),
+  },
+
   compose: (data: ComposeRequest) =>
     request<ComposeResponse>("/api/compose", {
       method: "POST",
@@ -120,6 +146,7 @@ import type {
   Character,
   WardrobeItem,
   MoodReference,
+  WorldLocation,
   FeedPost,
   FeedPostUpdate,
   GenerationJob,

@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import CharactersPage from "./pages/CharactersPage";
 import WardrobePage from "./pages/WardrobePage";
 import MoodPage from "./pages/MoodPage";
+import WorldPage from "./pages/WorldPage";
 import ComposerPage from "./pages/ComposerPage";
 import FeedPage from "./pages/FeedPage";
 import LogPage from "./pages/LogPage";
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/characters" element={<CharactersPage />} />
         <Route path="/wardrobe" element={<WardrobePage />} />
         <Route path="/mood" element={<MoodPage />} />
+        <Route path="/world" element={<WorldPage />} />
         <Route path="/composer" element={<ComposerPage />} />
         <Route path="/feed" element={<FeedPage />} />
         <Route path="/log" element={<LogPage />} />

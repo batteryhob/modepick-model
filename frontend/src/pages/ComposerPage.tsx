@@ -91,6 +91,11 @@ export default function ComposerPage() {
     queryFn: api.mood.list,
   });
 
+  const { data: worldData } = useQuery({
+    queryKey: ["world"],
+    queryFn: api.world.list,
+  });
+
   const composeMutation = useMutation({
     mutationFn: api.compose,
     onSuccess: (data) => {
@@ -120,6 +125,7 @@ export default function ComposerPage() {
 
   const activeChar = characters.find((c: Character) => c.id === activeCharacterId);
   const wardrobeItems = wardrobeData?.items || [];
+  const locations = worldData?.items || [];
 
   // Keep selectedReferenceIds aligned with the active character — drop any
   // ids that no longer belong (e.g. character was deleted or refs changed).
@@ -191,6 +197,11 @@ export default function ComposerPage() {
     return moods.find((m: MoodReference) => m.id === slots.mood);
   };
 
+  const getLocationItem = () => {
+    if (!slots.location) return undefined;
+    return locations.find((l) => l.id === slots.location);
+  };
+
   // Count references for this call. Each wardrobe slot contributes all of the
   // selected product's images, not just one — multiple angles improve fidelity.
   // Character contributes len(selectedReferenceIds) — empty selection falls
@@ -205,7 +216,8 @@ export default function ComposerPage() {
     0,
   );
   const moodRefCount = slots.mood ? 1 : 0;
-  const totalRefs = charRefCount + productRefCount + moodRefCount;
+  const locationRefCount = getLocationItem()?.images.length ?? 0;
+  const totalRefs = charRefCount + productRefCount + moodRefCount + locationRefCount;
   const maxRefs = provider === "openai" ? 16 : 14;
 
   const canGenerate = !!activeChar && !inProgress && totalRefs <= maxRefs;
@@ -364,6 +376,59 @@ export default function ComposerPage() {
             </div>
           );
         })}
+
+        {/* Location Slot (세계관) */}
+        <div
+          className={`border rounded-lg p-3 bg-white cursor-pointer hover:bg-gray-50 border-l-4 ${
+            slots.location ? "border-l-indigo-500" : "border-l-gray-200"
+          }`}
+          onClick={() => setPickerOpen("world")}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              {getLocationItem() ? (
+                <>
+                  {getLocationItem()!.images[0] && (
+                    <img
+                      src={imageUrl(getLocationItem()!.images[0].image_id)}
+                      alt={getLocationItem()!.name}
+                      className="w-10 h-10 rounded object-cover"
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono text-gray-400">
+                      세계관
+                      {getLocationItem()!.images.length > 1 && (
+                        <span className="ml-1 text-gray-500">
+                          · {getLocationItem()!.images.length}장
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm font-medium truncate">{getLocationItem()!.name}</p>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <p className="text-xs font-mono text-gray-400">세계관 (장소)</p>
+                  <p className="text-sm text-gray-400">비어있음</p>
+                </div>
+              )}
+            </div>
+            {slots.location && (
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSlot("location", null);
+                }}
+                aria-label="장소 비우기"
+                variant="danger"
+                size="sm"
+              >
+                ×
+              </IconButton>
+            )}
+          </div>
+        </div>
 
         {/* Mood Slot */}
         <div
@@ -609,6 +674,9 @@ export default function ComposerPage() {
               {moodRefCount > 0 && (
                 <p className="text-gray-600">무드 레퍼런스 x 1</p>
               )}
+              {locationRefCount > 0 && (
+                <p className="text-gray-600">세계관 레퍼런스 x {locationRefCount}</p>
+              )}
             </div>
           </div>
 
@@ -654,6 +722,7 @@ export default function ComposerPage() {
           characters={characters}
           wardrobeItems={wardrobeItems}
           moods={moods}
+          locations={locations}
           initialCharacterId={activeCharacterId}
           initialReferenceIds={selectedReferenceIds}
           onSelect={(id, refIds) => {

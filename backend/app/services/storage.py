@@ -16,6 +16,7 @@ from app.models import (
     ImageAsset,
     MoodReference,
     WardrobeItemImage,
+    WorldLocationImage,
 )
 
 
@@ -131,6 +132,7 @@ class StorageService:
                 select(Character.id).where(Character.base_image_id == image_id),
                 select(CharacterReference.id).where(CharacterReference.image_id == image_id),
                 select(WardrobeItemImage.id).where(WardrobeItemImage.image_id == image_id),
+                select(WorldLocationImage.id).where(WorldLocationImage.image_id == image_id),
                 select(MoodReference.id).where(MoodReference.image_id == image_id),
                 select(FeedPost.id).where(FeedPost.image_id == image_id),
             )
