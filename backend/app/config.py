@@ -25,8 +25,14 @@ class Settings(BaseSettings):
     # All keys are prefixed with this folder so the bucket can be shared
     # with other data without collision. Set to "" to write at the root.
     s3_key_prefix: str = "modepic-model"
-    # Presigned URL TTL — long enough for a browser tab session, short
-    # enough that leaked URLs don't stay valid forever.
+    # When True (default for this app), every uploaded object is tagged
+    # with the public-read ACL and image URLs are the stable direct S3
+    # URL — no presigning, no expiry. Set False to keep objects private
+    # and serve via short-lived presigned URLs instead.
+    # Requires the bucket to allow public ACLs (Block Public Access OFF
+    # and Object Ownership = BucketOwnerPreferred or ACLs enabled).
+    s3_public_read: bool = True
+    # Presigned URL TTL — only used when s3_public_read is False.
     s3_presigned_expires_seconds: int = 3600
 
     # Server

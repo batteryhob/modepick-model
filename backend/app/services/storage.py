@@ -95,12 +95,19 @@ class StorageService:
 
     def _s3_put(self, key: str, body: bytes, content_type: str) -> None:
         assert self._s3 is not None
-        self._s3.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=body,
-            ContentType=content_type,
-        )
+        params: dict = {
+            "Bucket": self.bucket,
+            "Key": key,
+            "Body": body,
+            "ContentType": content_type,
+        }
+        if settings.s3_public_read:
+            # Each object is individually marked public-read so the direct
+            # URL works without bucket-wide public-access policy. The
+            # bucket must still allow ACLs (Block Public Access OFF +
+            # Object Ownership permitting ACLs).
+            params["ACL"] = "public-read"
+        self._s3.put_object(**params)
 
     def _s3_get_bytes(self, key: str) -> bytes:
         assert self._s3 is not None
@@ -121,6 +128,15 @@ class StorageService:
             Params={"Bucket": self.bucket, "Key": key},
             ExpiresIn=settings.s3_presigned_expires_seconds,
         )
+
+    def _s3_public_url(self, key: str) -> str:
+        """Stable, permanent virtual-hosted URL. Only resolvable if the
+        object has public-read ACL (or the bucket is broadly public)."""
+        region = settings.s3_bucket_region
+        # AWS treats us-east-1 specially; safest virtual-hosted form
+        # includes the region in the host for all other regions.
+        host = f"{self.bucket}.s3.{region}.amazonaws.com"
+        return f"https://{host}/{key}"
 
     # -------------------------------------------------------------- writes
 
@@ -198,14 +214,18 @@ class StorageService:
             return self._resolve_storage_path(asset.storage_path)
 
     def get_image_presigned_url(self, image_id: str) -> str | None:
-        """S3-mode only: short-lived URL the browser can fetch directly.
-        Returns None in local mode."""
+        """S3-mode only: returns either a permanent public URL (when objects
+        are uploaded public-read) or a short-lived presigned URL. Returns
+        None in local mode. Name kept for API stability — the URL kind is
+        a config concern, not a caller concern."""
         if not self.use_s3:
             return None
         with Session(engine) as session:
             asset = session.get(ImageAsset, image_id)
             if not asset:
                 raise FileNotFoundError(f"ImageAsset {image_id} not found")
+            if settings.s3_public_read:
+                return self._s3_public_url(asset.storage_path)
             return self._s3_presigned_url(asset.storage_path)
 
     def get_mime_type(self, image_id: str) -> str:
