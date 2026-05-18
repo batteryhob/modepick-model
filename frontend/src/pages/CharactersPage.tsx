@@ -163,7 +163,6 @@ export default function CharactersPage() {
         persona,
         provider,
         reference_count: referenceCount,
-        anchor_character_id: anchorCharacterId,
       });
       setCreateJobId(result.job_id);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -402,9 +401,9 @@ export default function CharactersPage() {
                 />
                 <div className="text-xs text-gray-600 leading-snug">
                   <p>
-                    <span className="font-medium">{anchorCharacter.name}</span> 의 이미지를 레퍼런스로 사용합니다
+                    <span className="font-medium">{anchorCharacter.name}</span> 의 페르소나를 가져왔습니다
                   </p>
-                  <p className="text-gray-400">같은 인물의 새 이미지가 생성됩니다</p>
+                  <p className="text-gray-400">수정해서 새 인물로 다시 생성됩니다</p>
                 </div>
               </div>
             )}

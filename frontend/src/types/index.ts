@@ -110,7 +110,6 @@ export interface CharacterCreateRequest {
   persona: Record<string, string>;
   provider: "openai" | "gemini";
   reference_count: number;
-  anchor_character_id?: string | null;
 }
 
 export interface FeedPost {
