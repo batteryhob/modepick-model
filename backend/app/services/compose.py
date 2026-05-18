@@ -138,16 +138,151 @@ def _camera_signature(capture_style: str) -> str:
     )
 
 
-def _photorealism_directives(capture_style: str) -> list[str]:
-    """Anti-AI directives. Camera signature line swaps for selfie modes;
-    the rest stay constant (skin / lighting / grain / candid)."""
-    return [
-        _camera_signature(capture_style),
-        "Soft natural lighting (window light or overcast daylight), gentle directional shadows, no harsh studio fill.",
-        "Natural skin texture with visible pores and subtle imperfections — no beauty retouching, no plastic skin, no airbrushed look.",
-        "Candid framing, relaxed pose with slight body asymmetry, unforced expression.",
-        "Subtle film grain, Kodak Portra-style color palette — muted natural tones, not oversaturated, no CGI look.",
-    ]
+# ----------------------------------------------------------------------------
+# Photo-realism prompt engineering.
+#
+# Strategy: rather than a single static block of directives (which the model
+# learns to render in a recognizable way), we keep multiple specific options
+# for each axis — lighting / pose / composition / film stock / photographer
+# reference — and sample one of each per compose call. Three benefits:
+#   1. Specificity beats genericity for image gen.
+#   2. Per-call variation: "다시 생성" yields different vibes, same identity.
+#   3. Photographer-style references nudge the model toward learned looks.
+# Selfie modes use a separate lighter "phone" block.
+# ----------------------------------------------------------------------------
+
+OPENER_EDITORIAL = (
+    "Hyperrealistic candid photograph that looks like a frame pulled from real "
+    "life, not a posed photoshoot and absolutely not a generated image."
+)
+OPENER_PHONE = (
+    "Real phone snapshot — casual, slightly imperfect, the kind of photo "
+    "people actually take in everyday life and post on social media."
+)
+
+LIGHTING_POOL = [
+    "Late afternoon window light from one side, soft directional falloff into gentle shadow on the opposite cheek, subtle warm cast.",
+    "Overcast diffused daylight, even soft shadows, slight cool blue-grey color cast, no direct sun.",
+    "Golden hour low-angle warm sun from the side, long soft shadows, amber-tinted highlights and warm skin tones.",
+    "Mixed indoor light - warm tungsten lamps alongside cool daylight from a window, naturalistic temperature shift across the frame.",
+    "Morning side light through a tall window, slightly cool, gentle directional shadows defining the face and shoulders.",
+    "Blue hour twilight, soft ambient sky light mixed with warm street lights, low contrast and atmospheric.",
+]
+
+POSE_POOL = [
+    "Weight shifted to one hip in natural contrapposto, hands in relaxed unposed positions (not clasped, not on hips), head tilted a few degrees off-axis, gaze slightly off-camera as if at something just past the lens.",
+    "Standing slightly off-balance with weight on one leg, shoulders subtly asymmetric, one hand in motion (adjusting hair, strap, or pocket), soft natural micro-expression.",
+    "Mid-step or just paused walking - body subtly twisted, hands moving naturally rather than placed, candid moment caught between actions.",
+    "Leaning casually against an unseen wall or surface, one shoulder dropped, body angled to camera, gaze relaxed and unfocused.",
+    "Subtle gesture mid-motion - brushing hair back, adjusting clothing, looking down briefly - the kind of frame caught between takes.",
+    "Sitting or perched casually, one elbow resting on something, weight distributed asymmetrically, expression unposed and present in the moment.",
+]
+
+COMPOSITION_POOL = [
+    "Off-center composition placing the subject around the rule-of-thirds line with natural negative space, slight intentional asymmetry as if not framed perfectly.",
+    "Tight crop that doesn't include the full body - some part of the subject extends past the frame edge, like a real candid grabbed in the moment.",
+    "Subject placed slightly low in the frame with environment occupying upper third, cinematic widescreen-feel even within 4:5.",
+    "Foreground element slightly out of focus near the edge of frame (a hand, doorway, piece of furniture), giving depth and accidental-real composition.",
+]
+
+SKIN_AND_TEXTURE_DIRECTIVE = (
+    "Skin: real human texture with visible pores, subtle natural blemishes, "
+    "slight redness in cheeks, faint asymmetry between left and right side of "
+    "face. Skin tone varies slightly between face, neck, and hands. Absolutely "
+    "no beauty retouching, no smoothing filter, no airbrushed plastic skin."
+)
+
+FILM_STOCK_POOL = [
+    "Kodak Portra 400 film aesthetic - muted natural tones, warm shadows, true-to-life skin, subtle organic grain.",
+    "Fujifilm Pro 400H film look - soft pastel highlights, gentle cool cast in shadows, slightly desaturated greens.",
+    "Cinestill 800T film cast - warm tungsten tones, slight halation glow around bright lights, mood of late-night indoor.",
+    "Kodak Gold 200 everyday-snapshot palette - warm sun-baked tones, light grain, slightly saturated reds and yellows.",
+    "Fujifilm Superia 400 - slight green/teal lean in shadows, natural mid-range, the look of everyday film photos.",
+]
+
+PHOTOGRAPHER_REFS = [
+    "in the style of Petra Collins - dreamy candid intimacy, soft pastel tones, youthful naturalism",
+    "in the style of Tyler Mitchell - youthful editorial naturalism, soft natural light, relaxed authentic posture",
+    "in the style of Vivian Maier - observational street portraiture, real-life moments caught without performance",
+    "in the style of Wim Wenders cinematic documentary - quiet stillness, environmental context, painterly composition",
+    "in the style of an i-D Magazine street editorial - fashion-aware but candid, slightly imperfect, real",
+    "in the style of a Korean indie editorial photographer - soft minimalism, restrained palette, quiet emotion",
+    "in the style of Annie Leibovitz portrait - environmental storytelling, distinctive lighting, the subject as a person not a model",
+]
+
+NEGATIVE_DIRECTIVE_EDITORIAL = (
+    "Avoid: AI-generated look, plastic skin, perfectly symmetric features, "
+    "glamour-shot pose, influencer-perfect smile, photoshopped retouching, "
+    "stock-photo composition, oversaturated digital colors, dead-center "
+    "passport-photo framing."
+)
+NEGATIVE_DIRECTIVE_PHONE = (
+    "Avoid: glossy editorial polish, professional studio look, perfect skin "
+    "retouching, model-photoshoot pose - this should look like a casual phone "
+    "photo, not a magazine cover."
+)
+
+PHONE_LIGHTING_POOL = [
+    "Soft natural light from a window, the kind of light you actually have at home in the late afternoon.",
+    "Mixed indoor practical light - warm overhead lamp and a window, slight color temperature mismatch.",
+    "Outdoor daylight, slightly cloudy, even and unflattering in the real way phone photos are.",
+    "Late evening warm indoor lighting, soft shadows, moody phone shot people take before going out.",
+]
+
+PHONE_POSE_POOL = [
+    "Body slightly turned to angle in the mirror/camera, free hand relaxed or on hip, weight shifted casually, head tilted just enough to be flattering without looking posed.",
+    "Mid-pose check-in expression - looking at own reflection or screen with a slightly self-aware micro-smile, not a posed glamour smile.",
+    "Casual stance with one hand holding the phone, the other hand naturally at side or adjusting something, body language unaware-of-audience.",
+]
+
+
+def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
+    """Build a fresh layered realism block. Returns (directives, picks)
+    where picks records which pool items were sampled (so callers can
+    record them in job inputs for traceability and post-hoc tuning)."""
+    is_phone = capture_style in ("SELFIE", "MIRROR_SELFIE")
+
+    if is_phone:
+        lighting = random.choice(PHONE_LIGHTING_POOL)
+        pose = random.choice(PHONE_POSE_POOL)
+        return (
+            [
+                OPENER_PHONE,
+                _camera_signature(capture_style),
+                lighting,
+                pose,
+                SKIN_AND_TEXTURE_DIRECTIVE,
+                NEGATIVE_DIRECTIVE_PHONE,
+            ],
+            {"mode": "phone", "lighting": lighting, "pose": pose},
+        )
+
+    lighting = random.choice(LIGHTING_POOL)
+    pose = random.choice(POSE_POOL)
+    composition = random.choice(COMPOSITION_POOL)
+    film = random.choice(FILM_STOCK_POOL)
+    photographer = random.choice(PHOTOGRAPHER_REFS)
+    return (
+        [
+            OPENER_EDITORIAL,
+            _camera_signature(capture_style),
+            lighting,
+            pose,
+            composition,
+            SKIN_AND_TEXTURE_DIRECTIVE,
+            film,
+            photographer,
+            NEGATIVE_DIRECTIVE_EDITORIAL,
+        ],
+        {
+            "mode": "editorial",
+            "lighting": lighting,
+            "pose": pose,
+            "composition": composition,
+            "film": film,
+            "photographer": photographer,
+        },
+    )
 
 
 def _build_compose_prompt(
@@ -214,9 +349,9 @@ def _build_compose_prompt(
     lines.append(VIEW_PROMPTS[view])
     if capture_style in CAPTURE_STYLE_PROMPTS:
         lines.append(CAPTURE_STYLE_PROMPTS[capture_style])
-    # Photo-realism directives — camera signature line varies with capture
-    # style (phone for selfies, DSLR otherwise); rest stay constant.
-    lines.extend(_photorealism_directives(capture_style))
+    # Photo-realism directives — randomly sampled per call from layered pools.
+    realism_lines, _picks = _photorealism_directives(capture_style)
+    lines.extend(realism_lines)
     final_look = (
         "indistinguishable from a real phone photo"
         if capture_style in ("SELFIE", "MIRROR_SELFIE")
