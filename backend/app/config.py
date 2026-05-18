@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = ""
     # All keys are prefixed with this folder so the bucket can be shared
     # with other data without collision. Set to "" to write at the root.
-    s3_key_prefix: str = "modepick"
+    s3_key_prefix: str = "modepic-model"
     # Presigned URL TTL — long enough for a browser tab session, short
     # enough that leaked URLs don't stay valid forever.
     s3_presigned_expires_seconds: int = 3600
