@@ -13,12 +13,16 @@ from app.services.storage import storage_service
 logger = logging.getLogger(__name__)
 
 
+# Order matters: this is what gets generated as the user steps up reference
+# count. The side views come first because front + both sides locks in face
+# geometry far better than full-body shots, which dominate identity drift in
+# downstream compose calls. Body shots come next, then expressions.
 REFERENCE_ROLES_BY_PRIORITY = [
+    "FACE_SIDE_L",
+    "FACE_SIDE_R",
     "FULL_BODY",
     "HALF_BODY",
     "EXPRESSION_SMILE",
-    "FACE_SIDE_L",
-    "FACE_SIDE_R",
     "EXPRESSION_CALM",
     "FACE_PROFILE",
 ]

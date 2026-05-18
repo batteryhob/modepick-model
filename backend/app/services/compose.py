@@ -24,13 +24,17 @@ REFERENCE_LIMITS = {"openai": 16, "gemini": 14}
 
 SLOT_CATEGORIES = ["top", "bottom", "outerwear", "dress", "bag", "shoes"]
 
+# Order mirrors character.py — sides come right after the front view so
+# that even at character_reference_count=3 the model gets front + both
+# sides (best identity anchor), and body shots/expressions get appended
+# only when the user explicitly raises the ref count.
 COMPOSE_ROLES_BY_PRIORITY = [
     "FACE_FRONT",
+    "FACE_SIDE_L",
+    "FACE_SIDE_R",
     "FULL_BODY",
     "HALF_BODY",
     "EXPRESSION_SMILE",
-    "FACE_SIDE_L",
-    "FACE_SIDE_R",
     "EXPRESSION_CALM",
     "FACE_PROFILE",
 ]
