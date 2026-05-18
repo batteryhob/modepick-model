@@ -105,7 +105,16 @@ export interface FeedPost {
   image_id: string;
   slots: ComposerSlots;
   scene: string;
+  caption: string | null;
+  hashtags: string[];
+  posted_at: string | null;
   created_at: string;
+}
+
+export interface FeedPostUpdate {
+  caption?: string | null;
+  hashtags?: string[];
+  posted?: boolean;
 }
 
 export interface ComposerSlots {

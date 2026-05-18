@@ -1,9 +1,11 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, func, select
 
 from app.database import get_session
-from app.models import FeedPost
+from app.models import FeedPost, utcnow
 from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/feed", tags=["feed"])
@@ -16,6 +18,14 @@ class FeedPostCreate(BaseModel):
     scene: str = ""
 
 
+class FeedPostUpdate(BaseModel):
+    caption: Optional[str] = None
+    hashtags: Optional[list[str]] = None
+    # `posted: bool` toggles the posted_at timestamp. True stamps it to now
+    # (only on transition from unposted -> posted); False clears it.
+    posted: Optional[bool] = None
+
+
 def _post_to_dict(p: FeedPost) -> dict:
     return {
         "id": p.id,
@@ -23,6 +33,9 @@ def _post_to_dict(p: FeedPost) -> dict:
         "image_id": p.image_id,
         "slots": p.slots,
         "scene": p.scene,
+        "caption": p.caption,
+        "hashtags": p.hashtags or [],
+        "posted_at": p.posted_at.isoformat() if p.posted_at else None,
         "created_at": p.created_at.isoformat(),
     }
 
@@ -53,6 +66,40 @@ def create_post(req: FeedPostCreate, session: Session = Depends(get_session)):
         scene=req.scene,
     )
     session.add(post)
+    session.commit()
+    session.refresh(post)
+    return _post_to_dict(post)
+
+
+@router.patch("/{post_id}")
+def update_post(
+    post_id: str,
+    req: FeedPostUpdate,
+    session: Session = Depends(get_session),
+):
+    post = session.get(FeedPost, post_id)
+    if not post:
+        raise HTTPException(404, "Post not found")
+
+    if req.caption is not None:
+        post.caption = req.caption or None
+    if req.hashtags is not None:
+        # Normalize: strip whitespace and leading '#', then drop empties.
+        # Filter must run AFTER cleanup so inputs like "#" don't survive.
+        cleaned: list[str] = []
+        for raw in req.hashtags:
+            if not isinstance(raw, str):
+                continue
+            tag = raw.lstrip("#").strip()
+            if tag:
+                cleaned.append(tag)
+        post.hashtags = cleaned
+    if req.posted is not None:
+        if req.posted and post.posted_at is None:
+            post.posted_at = utcnow()
+        elif not req.posted:
+            post.posted_at = None
+
     session.commit()
     session.refresh(post)
     return _post_to_dict(post)

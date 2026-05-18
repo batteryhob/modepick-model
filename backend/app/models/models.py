@@ -129,5 +129,10 @@ class FeedPost(SQLModel, table=True):
     character_id: str = Field(foreign_key="character.id")
     image_id: str = Field(foreign_key="image_asset.id")
     slots: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    scene: str = ""
+    scene: str = ""  # the free-form compose prompt the user entered
+    caption: Optional[str] = None  # IG caption draft
+    hashtags: list = Field(default_factory=list, sa_column=Column(JSON))
+    # When set, the user has marked this post as already published on
+    # Instagram. Null = still a draft / unposted.
+    posted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow, index=True)

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, imageUrl } from "@/api/client";
 import { useComposerStore } from "@/stores/composer";
+import { useToast } from "@/components/Toast";
 import type {
   Character,
   WardrobeItem,
@@ -32,8 +33,14 @@ const VIEW_OPTIONS: { value: ComposeView; label: string }[] = [
   { value: "LOW_ANGLE", label: "로우앵글 (Low Angle)" },
 ];
 
+// Rough mean per-image generation time at quality=medium with several refs,
+// based on observed jobs. Used to display an ETA during compose so the user
+// has a sense of "how long left" instead of a bare spinner.
+const ESTIMATED_COMPOSE_SECONDS = 50;
+
 export default function ComposerPage() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const {
     activeCharacterId,
     selectedReferenceIds,
@@ -95,7 +102,9 @@ export default function ComposerPage() {
     mutationFn: api.feed.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["feed"] });
+      toast.success("피드에 저장됨");
     },
+    onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
   });
 
   const activeChar = characters.find((c: Character) => c.id === activeCharacterId);
@@ -124,14 +133,40 @@ export default function ComposerPage() {
       setComposeJobId(null);
       setComposeError(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      toast.success("합성 완료");
     }
 
     if (composeJob.status === "failed") {
-      setComposeError(composeJob.error_message || "합성에 실패했습니다.");
+      const msg = composeJob.error_message || "합성에 실패했습니다.";
+      setComposeError(msg);
       setComposeJobId(null);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      toast.error(`합성 실패: ${msg.slice(0, 100)}`);
     }
-  }, [composeJob, queryClient]);
+  }, [composeJob, queryClient, toast]);
+
+  // Elapsed time during compose for the progress indicator.
+  const composeStartedAtRef = useRef<number | null>(null);
+  const [composeElapsed, setComposeElapsed] = useState(0);
+  const inProgress = composeMutation.isPending || !!composeJobId;
+
+  useEffect(() => {
+    if (!inProgress) {
+      composeStartedAtRef.current = null;
+      setComposeElapsed(0);
+      return;
+    }
+    if (composeStartedAtRef.current === null) {
+      composeStartedAtRef.current = Date.now();
+    }
+    const tick = () => {
+      if (composeStartedAtRef.current === null) return;
+      setComposeElapsed(Math.floor((Date.now() - composeStartedAtRef.current) / 1000));
+    };
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [inProgress]);
 
   // Get item details for filled slots
   const getSlotItem = (key: string): WardrobeItem | undefined => {
@@ -162,9 +197,12 @@ export default function ComposerPage() {
   const totalRefs = charRefCount + productRefCount + moodRefCount;
   const maxRefs = provider === "openai" ? 16 : 14;
 
+  const canGenerate = !!activeChar && !inProgress && totalRefs <= maxRefs;
+
   const handleGenerate = () => {
     const charId = activeChar?.id;
     if (!charId) return;
+    if (!canGenerate) return;
 
     setResultImageId(null);
     setResultCost(0);
@@ -183,6 +221,7 @@ export default function ComposerPage() {
   const handleSaveToFeed = () => {
     const charId = activeChar?.id;
     if (!charId || !resultImageId) return;
+    if (saveFeedMutation.isPending) return;
 
     saveFeedMutation.mutate({
       character_id: charId,
@@ -191,6 +230,26 @@ export default function ComposerPage() {
       scene,
     });
   };
+
+  // Global keyboard shortcuts: ⌘/Ctrl+Enter generate, ⌘/Ctrl+S save to feed.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleGenerate();
+      } else if (e.key.toLowerCase() === "s") {
+        if (resultImageId) {
+          e.preventDefault();
+          handleSaveToFeed();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChar, slots, scene, provider, quality, view, selectedReferenceIds, totalRefs, maxRefs, resultImageId, inProgress, saveFeedMutation.isPending]);
 
   const handleDiscard = () => {
     setResultImageId(null);
@@ -394,32 +453,44 @@ export default function ComposerPage() {
         {/* Generate Button */}
         <button
           onClick={handleGenerate}
-          disabled={
-            !activeChar ||
-            composeMutation.isPending ||
-            !!composeJobId ||
-            totalRefs > maxRefs
-          }
+          disabled={!canGenerate}
           className="w-full py-3 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 tracking-wider uppercase"
         >
-          {composeMutation.isPending || composeJobId
+          {inProgress
             ? "합성 중..."
             : totalRefs > maxRefs
               ? "이미지 줄이세요"
-              : "룩 생성"}
+              : "룩 생성 (⌘↵)"}
         </button>
       </div>
 
       {/* Center: Doll Display */}
       <div className="flex-1 flex flex-col items-center min-w-0 lg:overflow-y-auto">
         <div className="w-full max-w-md aspect-[4/5] bg-gray-100 rounded-lg overflow-hidden relative">
-          {composeMutation.isPending || composeJobId ? (
+          {inProgress ? (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-              <div className="text-center">
+              <div className="text-center px-6">
                 <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-500">
-                  {totalRefs}개 레퍼런스로 합성 중...
+                <p className="text-sm text-gray-700">
+                  {totalRefs}개 레퍼런스로 합성 중
                 </p>
+                <p className="text-xs text-gray-400 mt-1 font-mono">
+                  {composeElapsed}s
+                  {composeElapsed < ESTIMATED_COMPOSE_SECONDS &&
+                    ` / ~${ESTIMATED_COMPOSE_SECONDS}s`}
+                </p>
+                {/* Soft progress bar that asymptotes at ~95% until success */}
+                <div className="mt-3 w-40 mx-auto h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gray-900 transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        95,
+                        (composeElapsed / ESTIMATED_COMPOSE_SECONDS) * 95,
+                      )}%`,
+                    }}
+                  />
+                </div>
               </div>
             </div>
           ) : resultImageId ? (
@@ -446,17 +517,17 @@ export default function ComposerPage() {
           <div className="flex gap-2 mt-3">
             <button
               onClick={handleGenerate}
-              disabled={composeMutation.isPending}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+              disabled={!canGenerate}
+              className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50"
             >
               다시 생성
             </button>
             <button
               onClick={handleSaveToFeed}
               disabled={saveFeedMutation.isPending}
-              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800"
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
             >
-              {saveFeedMutation.isPending ? "저장 중..." : "피드에 저장"}
+              {saveFeedMutation.isPending ? "저장 중..." : "피드에 저장 (⌘S)"}
             </button>
             <button
               onClick={handleDiscard}
@@ -465,10 +536,6 @@ export default function ComposerPage() {
               버리기
             </button>
           </div>
-        )}
-
-        {saveFeedMutation.isSuccess && (
-          <p className="text-sm text-emerald-600 mt-2">피드에 저장되었습니다!</p>
         )}
 
         {(composeMutation.isError || composeError) && (

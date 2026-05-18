@@ -48,6 +48,22 @@ def main() -> None:
             if result.rowcount:
                 print(f"[3] Removed {result.rowcount} legacy accessory row(s).")
 
+        # Migration 4 — FeedPost gains caption / hashtags / posted_at for the
+        # Instagram-prep workflow (caption drafts, hashtag set, posted toggle).
+        if _table_exists(conn, "feed_post"):
+            feed_cols = _columns(conn, "feed_post")
+            if "caption" not in feed_cols:
+                conn.exec_driver_sql("ALTER TABLE feed_post ADD COLUMN caption TEXT")
+                print("[4a] Added feed_post.caption")
+            if "hashtags" not in feed_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE feed_post ADD COLUMN hashtags TEXT DEFAULT '[]'"
+                )
+                print("[4b] Added feed_post.hashtags")
+            if "posted_at" not in feed_cols:
+                conn.exec_driver_sql("ALTER TABLE feed_post ADD COLUMN posted_at DATETIME")
+                print("[4c] Added feed_post.posted_at")
+
     # Always run create_all to add any new tables.
     create_db_and_tables()
     print("Schema up to date.")

@@ -91,9 +91,15 @@ export const api = {
   feed: {
     list: (limit = 27, offset = 0) =>
       request<{ posts: FeedPost[]; total: number }>(`/api/feed?limit=${limit}&offset=${offset}`),
-    create: (data: Omit<FeedPost, "id" | "created_at">) =>
+    create: (data: Pick<FeedPost, "character_id" | "image_id" | "slots" | "scene">) =>
       request<FeedPost>("/api/feed", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: FeedPostUpdate) =>
+      request<FeedPost>(`/api/feed/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }),
@@ -115,6 +121,7 @@ import type {
   WardrobeItem,
   MoodReference,
   FeedPost,
+  FeedPostUpdate,
   GenerationJob,
   ComposeRequest,
   ComposeResponse,
