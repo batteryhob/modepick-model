@@ -12,8 +12,8 @@ class ComposeRequest(BaseModel):
     scene: str = ""
     provider: str = "openai"
     quality: str = "medium"
-    character_reference_count: int = 1
-    view: str = "FULL_BODY"
+    character_reference_ids: list[str] = []
+    view: str = "RANDOM"
 
 
 @router.post("/compose", status_code=202)
@@ -25,7 +25,7 @@ def compose(req: ComposeRequest, background_tasks: BackgroundTasks):
             scene=req.scene,
             provider_name=req.provider,
             quality=req.quality,
-            character_reference_count=req.character_reference_count,
+            character_reference_ids=req.character_reference_ids,
             view=req.view,
         )
         background_tasks.add_task(run_compose_job, job_id)

@@ -135,7 +135,7 @@ export interface ComposeRequest {
   scene: string;
   provider: "openai" | "gemini";
   quality: "low" | "medium" | "high";
-  character_reference_count: number;
+  character_reference_ids: string[];
   view: ComposeView;
 }
 

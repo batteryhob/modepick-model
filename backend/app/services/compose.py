@@ -157,7 +157,7 @@ def _prepare_compose_inputs(
     scene: str,
     provider_name: str,
     quality: str,
-    character_reference_count: int = 1,
+    character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
 ) -> dict:
     view = _resolve_view(view)
@@ -166,19 +166,34 @@ def _prepare_compose_inputs(
     if not character:
         raise ValueError(f"Character {character_id} not found")
 
-    character_reference_count = max(1, min(character_reference_count, 8))
-
-    char_refs = session.exec(
+    all_char_refs = session.exec(
         select(CharacterReference).where(
             CharacterReference.character_id == character_id,
         )
     ).all()
-    refs_by_role = {r.role: r for r in char_refs}
-    selected_char_refs = [
-        refs_by_role[role]
-        for role in COMPOSE_ROLES_BY_PRIORITY
-        if role in refs_by_role
-    ][:character_reference_count]
+    refs_by_id = {r.id: r for r in all_char_refs}
+    refs_by_role = {r.role: r for r in all_char_refs}
+
+    # User explicitly picks which references to send. Empty list falls back
+    # to the FACE_FRONT (base) reference so compose never goes refless.
+    requested_ids = list(character_reference_ids or [])
+    chosen: list[CharacterReference] = []
+    seen: set[str] = set()
+    for rid in requested_ids:
+        ref = refs_by_id.get(rid)
+        if ref and ref.id not in seen:
+            chosen.append(ref)
+            seen.add(ref.id)
+    if not chosen and "FACE_FRONT" in refs_by_role:
+        chosen.append(refs_by_role["FACE_FRONT"])
+
+    # Order chosen refs by COMPOSE_ROLES_BY_PRIORITY so the prompt's numbered
+    # references line up with our identity-first convention regardless of the
+    # order the user clicked.
+    priority_index = {role: i for i, role in enumerate(COMPOSE_ROLES_BY_PRIORITY)}
+    selected_char_refs = sorted(
+        chosen, key=lambda r: priority_index.get(r.role, len(COMPOSE_ROLES_BY_PRIORITY))
+    )
 
     # 2. Build reference list with indexed positions
     references: list[dict] = []
@@ -261,7 +276,7 @@ def enqueue_compose_look(
     scene: str,
     provider_name: str,
     quality: str,
-    character_reference_count: int = 1,
+    character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
 ) -> str:
     with Session(engine) as session:
@@ -272,7 +287,7 @@ def enqueue_compose_look(
             scene,
             provider_name,
             quality,
-            character_reference_count,
+            character_reference_ids,
             view,
         )
         references = prepared["references"]
@@ -289,6 +304,7 @@ def enqueue_compose_look(
                     {"role": r["role"], "image_id": r["image_id"]} for r in references
                 ],
                 "character_reference_count": len(selected_char_refs),
+                "character_reference_ids": [r.id for r in selected_char_refs],
                 "slots": slots,
                 "scene": scene,
                 "quality": quality,

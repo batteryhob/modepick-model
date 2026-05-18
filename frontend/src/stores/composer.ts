@@ -3,13 +3,15 @@ import type { ComposerSlots, ComposeView } from "@/types";
 
 interface ComposerState {
   activeCharacterId: string | null;
+  selectedReferenceIds: string[];
   slots: ComposerSlots;
   scene: string;
   provider: "openai" | "gemini";
   quality: "low" | "medium" | "high";
   view: ComposeView;
 
-  setActiveCharacter: (id: string | null) => void;
+  setActiveCharacter: (id: string | null, referenceIds?: string[]) => void;
+  setSelectedReferenceIds: (ids: string[]) => void;
   setSlot: (key: keyof ComposerSlots, value: string | null) => void;
   setScene: (scene: string) => void;
   setProvider: (provider: "openai" | "gemini") => void;
@@ -30,13 +32,21 @@ const emptySlots: ComposerSlots = {
 
 export const useComposerStore = create<ComposerState>((set) => ({
   activeCharacterId: null,
+  selectedReferenceIds: [],
   slots: { ...emptySlots },
   scene: "",
   provider: "openai",
   quality: "medium",
   view: "RANDOM",
 
-  setActiveCharacter: (id) => set({ activeCharacterId: id }),
+  setActiveCharacter: (id, referenceIds) =>
+    set({
+      activeCharacterId: id,
+      // Switching characters always resets the ref selection — old ref ids
+      // don't belong to the new character.
+      selectedReferenceIds: referenceIds ?? [],
+    }),
+  setSelectedReferenceIds: (ids) => set({ selectedReferenceIds: ids }),
   setSlot: (key, value) =>
     set((state) => ({ slots: { ...state.slots, [key]: value } })),
   setScene: (scene) => set({ scene }),

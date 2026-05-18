@@ -36,7 +36,9 @@ export default function ComposerPage() {
   const queryClient = useQueryClient();
   const {
     activeCharacterId,
+    selectedReferenceIds,
     setActiveCharacter,
+    setSelectedReferenceIds,
     slots,
     setSlot,
     scene,
@@ -55,7 +57,6 @@ export default function ComposerPage() {
   const [resultJobId, setResultJobId] = useState<string | null>(null);
   const [composeJobId, setComposeJobId] = useState<string | null>(null);
   const [composeError, setComposeError] = useState<string | null>(null);
-  const [characterReferenceCount, setCharacterReferenceCount] = useState(1);
 
   const { data: characters = [] } = useQuery({
     queryKey: ["characters"],
@@ -99,14 +100,20 @@ export default function ComposerPage() {
 
   const activeChar = characters.find((c: Character) => c.id === activeCharacterId);
   const wardrobeItems = wardrobeData?.items || [];
-  const availableCharRefs = activeChar?.references?.length || 0;
 
+  // Keep selectedReferenceIds aligned with the active character — drop any
+  // ids that no longer belong (e.g. character was deleted or refs changed).
   useEffect(() => {
-    const maxAvailable = Math.min(Math.max(availableCharRefs, 1), 8);
-    if (characterReferenceCount > maxAvailable) {
-      setCharacterReferenceCount(maxAvailable);
+    if (!activeChar) {
+      if (selectedReferenceIds.length > 0) setSelectedReferenceIds([]);
+      return;
     }
-  }, [availableCharRefs, characterReferenceCount]);
+    const valid = new Set(activeChar.references.map((r) => r.id));
+    const filtered = selectedReferenceIds.filter((id) => valid.has(id));
+    if (filtered.length !== selectedReferenceIds.length) {
+      setSelectedReferenceIds(filtered);
+    }
+  }, [activeChar, selectedReferenceIds, setSelectedReferenceIds]);
 
   useEffect(() => {
     if (!composeJob) return;
@@ -140,8 +147,12 @@ export default function ComposerPage() {
 
   // Count references for this call. Each wardrobe slot contributes all of the
   // selected product's images, not just one — multiple angles improve fidelity.
+  // Character contributes len(selectedReferenceIds) — empty selection falls
+  // back to a single FACE_FRONT on the backend, so count it as 1.
   const charRefCount = activeChar
-    ? Math.min(characterReferenceCount, Math.max(availableCharRefs, 1), 8)
+    ? selectedReferenceIds.length > 0
+      ? selectedReferenceIds.length
+      : 1
     : 0;
   const productRefCount = WARDROBE_SLOTS.reduce(
     (sum, s) => sum + (getSlotItem(s.key)?.images.length ?? 0),
@@ -164,7 +175,7 @@ export default function ComposerPage() {
       scene,
       provider,
       quality,
-      character_reference_count: charRefCount,
+      character_reference_ids: selectedReferenceIds,
       view,
     });
   };
@@ -205,7 +216,12 @@ export default function ComposerPage() {
           className="border rounded-lg p-3 bg-white cursor-pointer hover:bg-gray-50 border-l-4 border-l-gray-900"
           onClick={() => setPickerOpen("character")}
         >
-          <p className="text-xs font-mono text-gray-400 mb-1">캐릭터</p>
+          <p className="text-xs font-mono text-gray-400 mb-1">
+            캐릭터
+            {activeChar && (
+              <span className="ml-1 text-gray-500">· 레퍼런스 {charRefCount}장</span>
+            )}
+          </p>
           {activeChar ? (
             <div className="flex items-center gap-2">
               <img
@@ -345,23 +361,6 @@ export default function ComposerPage() {
             rows={2}
           />
         </div>
-
-        {activeChar && (
-          <div className="border rounded-lg p-3 bg-white">
-            <p className="text-xs font-mono text-gray-400 mb-1">캐릭터 레퍼런스</p>
-            <select
-              value={charRefCount}
-              onChange={(e) => setCharacterReferenceCount(Number(e.target.value))}
-              className="w-full text-xs border rounded-md px-2 py-1.5"
-            >
-              {Array.from({ length: Math.min(Math.max(availableCharRefs, 1), 8) }, (_, i) => i + 1).map((count) => (
-                <option key={count} value={count}>
-                  {count}장 사용
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* Provider / Quality */}
         <div className="flex gap-2">
@@ -556,9 +555,11 @@ export default function ComposerPage() {
           characters={characters}
           wardrobeItems={wardrobeItems}
           moods={moods}
-          onSelect={(id) => {
+          initialCharacterId={activeCharacterId}
+          initialReferenceIds={selectedReferenceIds}
+          onSelect={(id, refIds) => {
             if (pickerOpen === "character") {
-              setActiveCharacter(id);
+              setActiveCharacter(id, refIds ?? []);
             } else {
               setSlot(pickerOpen as keyof ComposerSlots, id);
             }
