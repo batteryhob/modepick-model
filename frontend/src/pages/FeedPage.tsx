@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, imageUrl } from "@/api/client";
+import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { FeedPost } from "@/types";
@@ -137,7 +138,7 @@ export default function FeedPage() {
                   toggleSelect(post.id);
                 }}
                 aria-label={selected ? "선택 해제" : "선택"}
-                className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs transition-opacity ${
+                className={`absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-xs transition-opacity ${
                   selected
                     ? "bg-gray-900 text-white opacity-100"
                     : "bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white"
@@ -274,13 +275,9 @@ function CarouselViewer({
                 </span>
               )}
             </div>
-            <button
-              onClick={onClose}
-              aria-label="닫기"
-              className="text-gray-400 hover:text-gray-700 text-lg leading-none"
-            >
+            <IconButton onClick={onClose} aria-label="닫기" variant="subtle">
               ×
-            </button>
+            </IconButton>
           </div>
 
           {/* Body: caption / hashtags / posted toggle + read-only meta */}

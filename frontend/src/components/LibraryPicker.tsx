@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { imageUrl } from "@/api/client";
+import IconButton from "@/components/IconButton";
 import type { Character, WardrobeItem, MoodReference } from "@/types";
 
 interface Props {
@@ -106,12 +107,9 @@ export default function LibraryPicker({
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
           <h3 className="font-semibold">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-          >
+          <IconButton onClick={onClose} aria-label="닫기" variant="subtle">
             ×
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -205,14 +203,10 @@ function CharacterDrillView({
       <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b flex-shrink-0 gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={onBack}
-              className="text-gray-400 hover:text-gray-700 text-base leading-none flex-shrink-0"
-              aria-label="뒤로"
-            >
+          <div className="flex items-center gap-2 min-w-0">
+            <IconButton onClick={onBack} aria-label="뒤로" variant="subtle">
               ‹
-            </button>
+            </IconButton>
             <img
               src={imageUrl(char.base_image_id)}
               alt={char.name}
@@ -225,12 +219,9 @@ function CharacterDrillView({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0"
-          >
+          <IconButton onClick={onClose} aria-label="닫기" variant="subtle">
             ×
-          </button>
+          </IconButton>
         </div>
 
         {/* Body */}

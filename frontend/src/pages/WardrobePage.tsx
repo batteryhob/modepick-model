@@ -304,7 +304,10 @@ function ItemDetailModal({
         <div className="flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {item.images.map((img: WardrobeItemImage, idx: number) => (
-              <div key={img.id} className="border rounded-lg overflow-hidden bg-white relative">
+              <div
+                key={img.id}
+                className="border rounded-lg overflow-hidden bg-white relative group"
+              >
                 <div className="aspect-square bg-gray-50">
                   <img
                     src={imageUrl(img.image_id)}
@@ -312,22 +315,23 @@ function ItemDetailModal({
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="p-1.5 text-[10px] font-mono text-gray-400 flex justify-between">
-                  <span>#{idx + 1}</span>
-                  {item.images.length > 1 && (
-                    <button
-                      onClick={() => {
-                        if (confirm("이 이미지를 삭제하시겠습니까?")) {
-                          onRemoveImage(img.id);
-                        }
-                      }}
-                      disabled={isRemoving}
-                      className="text-gray-400 hover:text-red-500 disabled:opacity-50"
-                    >
-                      삭제
-                    </button>
-                  )}
+                <div className="p-1.5 text-[10px] font-mono text-gray-400">
+                  #{idx + 1}
                 </div>
+                {item.images.length > 1 && (
+                  <button
+                    aria-label="이미지 삭제"
+                    onClick={() => {
+                      if (confirm("이 이미지를 삭제하시겠습니까?")) {
+                        onRemoveImage(img.id);
+                      }
+                    }}
+                    disabled={isRemoving}
+                    className="absolute top-1.5 right-1.5 w-8 h-8 bg-white/90 rounded-full text-gray-500 hover:text-red-600 hover:bg-white text-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-sm disabled:opacity-30"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
 
@@ -426,8 +430,10 @@ function UploadModal({
                     className="w-full aspect-square object-cover rounded-md bg-gray-50"
                   />
                   <button
+                    type="button"
+                    aria-label="이미지 제거"
                     onClick={() => setFiles(files.filter((_, idx) => idx !== i))}
-                    className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full text-xs flex items-center justify-center hover:bg-black/80"
+                    className="absolute top-1 right-1 w-7 h-7 bg-black/60 text-white rounded-full text-sm flex items-center justify-center hover:bg-black/80"
                   >
                     ×
                   </button>

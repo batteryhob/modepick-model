@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, imageUrl } from "@/api/client";
+import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
 import type { Character } from "@/types";
 
@@ -244,15 +245,17 @@ export default function CharactersPage() {
                   </p>
                   <p className="text-xs text-gray-400 mt-1">{levelLabelFor(refCount)}</p>
                 </div>
-                <button
+                <IconButton
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(char.id);
                   }}
-                  className="text-gray-400 hover:text-red-500 text-sm"
+                  aria-label="캐릭터 삭제"
+                  variant="danger"
+                  size="sm"
                 >
-                  x
-                </button>
+                  ×
+                </IconButton>
               </div>
             </div>
           );

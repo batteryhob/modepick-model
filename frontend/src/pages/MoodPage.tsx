@@ -101,9 +101,10 @@ export default function MoodPage() {
                 onClick={() => {
                   if (confirm("이 무드를 삭제하시겠습니까?")) deleteMutation.mutate(mood.id);
                 }}
-                className="absolute top-2 right-2 w-6 h-6 bg-white/80 rounded-full text-gray-500 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                aria-label="무드 삭제"
+                className="absolute top-1.5 right-1.5 w-8 h-8 bg-white/90 rounded-full text-gray-500 hover:text-red-600 hover:bg-white text-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-sm"
               >
-                x
+                ×
               </button>
             </div>
             <div className="p-2">

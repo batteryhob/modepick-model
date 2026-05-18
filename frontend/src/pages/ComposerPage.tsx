@@ -10,6 +10,7 @@ import type {
   ComposerSlots,
   ComposeView,
 } from "@/types";
+import IconButton from "@/components/IconButton";
 import LibraryPicker from "@/components/LibraryPicker";
 
 const WARDROBE_SLOTS: { key: keyof ComposerSlots; label: string; color: string }[] = [
@@ -336,15 +337,17 @@ export default function ComposerPage() {
                   )}
                 </div>
                 {item && (
-                  <button
+                  <IconButton
                     onClick={(e) => {
                       e.stopPropagation();
                       setSlot(slot.key, null);
                     }}
-                    className="text-gray-400 hover:text-red-500 text-sm px-1"
+                    aria-label={`${slot.label} 비우기`}
+                    variant="danger"
+                    size="sm"
                   >
-                    x
-                  </button>
+                    ×
+                  </IconButton>
                 )}
               </div>
             </div>
@@ -380,15 +383,17 @@ export default function ComposerPage() {
               )}
             </div>
             {slots.mood && (
-              <button
+              <IconButton
                 onClick={(e) => {
                   e.stopPropagation();
                   setSlot("mood", null);
                 }}
-                className="text-gray-400 hover:text-red-500 text-sm px-1"
+                aria-label="무드 비우기"
+                variant="danger"
+                size="sm"
               >
-                x
-              </button>
+                ×
+              </IconButton>
             )}
           </div>
         </div>
