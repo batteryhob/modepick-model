@@ -14,17 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 # Order matters: this is what gets generated as the user steps up reference
-# count. The side views come first because front + both sides locks in face
-# geometry far better than full-body shots, which dominate identity drift in
-# downstream compose calls. Body shots come next, then expressions.
+# count. Identity comes first — face geometry from multiple angles, then
+# expressions (how the person looks smiling / calm), then a profile shot.
+# Body shots come last because they teach the model about pose/proportions,
+# not identity, and downstream compose drift is dominated by face accuracy.
 REFERENCE_ROLES_BY_PRIORITY = [
     "FACE_SIDE_L",
     "FACE_SIDE_R",
-    "FULL_BODY",
-    "HALF_BODY",
     "EXPRESSION_SMILE",
     "EXPRESSION_CALM",
     "FACE_PROFILE",
+    "HALF_BODY",
+    "FULL_BODY",
 ]
 
 # Character creation must produce a usable result quickly. Extra reference
