@@ -84,6 +84,21 @@ def _resolve_view(view: str | None) -> str:
     return DEFAULT_VIEW
 
 
+# Photo-realism directives baked into every compose call.
+# Each line targets one of the well-known "AI tells" — overly perfect skin,
+# studio-flat lighting, oversaturated color grading, symmetric poses. The
+# camera-signature line cues the model into "real DSLR photo" mode; the
+# Kodak Portra / film-grain hint pulls color toward natural tones; the skin
+# texture line is the single biggest anti-AI lever.
+PHOTOREALISM_DIRECTIVES = [
+    "Shot on a 35mm full-frame camera, 50mm lens at f/2.8 — natural shallow depth of field with soft background separation.",
+    "Soft natural lighting (window light or overcast daylight), gentle directional shadows, no harsh studio fill.",
+    "Natural skin texture with visible pores and subtle imperfections — no beauty retouching, no plastic skin, no airbrushed look.",
+    "Candid editorial framing, relaxed pose with slight body asymmetry, unforced expression.",
+    "Subtle 35mm film grain, Kodak Portra-style color palette — muted natural tones, not oversaturated, no CGI look.",
+]
+
+
 def _build_compose_prompt(
     character: Character,
     filled_slots: dict[str, WardrobeItem],
@@ -145,7 +160,10 @@ def _build_compose_prompt(
         lines.append(scene)
 
     lines.append(VIEW_PROMPTS[view])
-    lines.append("4:5 aspect ratio, editorial quality, professional photography.")
+    # Photo-realism directives — kept together as a single block for easier
+    # auditing / tweaking when AI tells start creeping back into outputs.
+    lines.extend(PHOTOREALISM_DIRECTIVES)
+    lines.append("4:5 aspect ratio, photorealistic, indistinguishable from a real DSLR photograph.")
 
     return "\n".join(lines)
 
