@@ -9,6 +9,7 @@ from app.models import (
     Character,
     CharacterReference,
     GenerationJob,
+    ImageAsset,
     MoodReference,
     WardrobeItem,
     WorldLocation,
@@ -362,6 +363,7 @@ def _build_compose_prompt(
     weather: str,
     season: str,
     time_of_day: str,
+    anchor_ref_position: int | None,
 ) -> str:
     lines = []
 
@@ -370,6 +372,19 @@ def _build_compose_prompt(
         lines.append(
             f"Generate a photorealistic image of the SAME person shown in reference images {ref_nums}. "
             "Maintain exact same face, skin tone, hair color, hair style."
+        )
+
+    if anchor_ref_position is not None:
+        # The anchor is a previously-generated shot of this same compose
+        # setup. It locks in the rendered look (hair styling, makeup, outfit
+        # presentation, body language) so variations stay visually
+        # consistent across a series of feed posts.
+        lines.append(
+            f"Reference image {anchor_ref_position} is a previously-generated shot of "
+            "this exact look. Keep the person's hair styling, makeup, outfit details, "
+            "and overall styling consistent with that anchor image — this should look "
+            "like another frame of the same scene/setup, only the framing or scene "
+            "context may differ."
         )
 
     for cat, item in filled_slots.items():
@@ -483,6 +498,7 @@ def _prepare_compose_inputs(
     weather: str = DEFAULT_WEATHER,
     season: str = DEFAULT_SEASON,
     time_of_day: str = DEFAULT_TIME_OF_DAY,
+    anchor_image_id: str | None = None,
 ) -> dict:
     view = _resolve_view(view)
     capture_style = _resolve_capture_style(capture_style)
@@ -581,6 +597,15 @@ def _prepare_compose_inputs(
                 )
                 location_ref_positions.append(pos)
 
+    # 4.6. Anchor image — a previously-generated shot the user pinned
+    # to lock the rendered look across a variation series.
+    anchor_ref_position: int | None = None
+    if anchor_image_id:
+        asset = session.get(ImageAsset, anchor_image_id)
+        if asset:
+            anchor_ref_position = len(references) + 1
+            references.append({"role": "anchor", "image_id": asset.id})
+
     # 5. Check reference limit
     limit = REFERENCE_LIMITS.get(provider_name, 16)
     if len(references) > limit:
@@ -608,6 +633,7 @@ def _prepare_compose_inputs(
         weather,
         season,
         time_of_day,
+        anchor_ref_position,
     )
 
     return {
@@ -619,6 +645,7 @@ def _prepare_compose_inputs(
         "weather": weather,
         "season": season,
         "time_of_day": time_of_day,
+        "anchor_image_id": anchor_image_id if anchor_ref_position else None,
     }
 
 
@@ -634,6 +661,7 @@ def enqueue_compose_look(
     weather: str = DEFAULT_WEATHER,
     season: str = DEFAULT_SEASON,
     time_of_day: str = DEFAULT_TIME_OF_DAY,
+    anchor_image_id: str | None = None,
 ) -> str:
     with Session(engine) as session:
         prepared = _prepare_compose_inputs(
@@ -649,6 +677,7 @@ def enqueue_compose_look(
             weather,
             season,
             time_of_day,
+            anchor_image_id,
         )
         references = prepared["references"]
         prompt = prepared["prompt"]
@@ -674,6 +703,7 @@ def enqueue_compose_look(
                 "weather": prepared["weather"],
                 "season": prepared["season"],
                 "time_of_day": prepared["time_of_day"],
+                "anchor_image_id": prepared["anchor_image_id"],
             },
             provider=provider_name,
             model=f"{provider_name}-image",

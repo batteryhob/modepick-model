@@ -20,6 +20,10 @@ interface ComposerState {
   weather: Weather;
   season: Season;
   timeOfDay: TimeOfDay;
+  // anchorImageId — when set, the next compose call uses this image as a
+  // reference so the look (hair / makeup / outfit styling) stays
+  // consistent across a variation series.
+  anchorImageId: string | null;
 
   setActiveCharacter: (id: string | null, referenceIds?: string[]) => void;
   setSelectedReferenceIds: (ids: string[]) => void;
@@ -32,6 +36,7 @@ interface ComposerState {
   setWeather: (weather: Weather) => void;
   setSeason: (season: Season) => void;
   setTimeOfDay: (time: TimeOfDay) => void;
+  setAnchorImageId: (id: string | null) => void;
   clearSlots: () => void;
 }
 
@@ -58,13 +63,16 @@ export const useComposerStore = create<ComposerState>((set) => ({
   weather: "AUTO",
   season: "AUTO",
   timeOfDay: "AUTO",
+  anchorImageId: null,
 
   setActiveCharacter: (id, referenceIds) =>
     set({
       activeCharacterId: id,
       // Switching characters always resets the ref selection — old ref ids
-      // don't belong to the new character.
+      // don't belong to the new character. Anchor also belongs to the
+      // prior character's look so clear it too.
       selectedReferenceIds: referenceIds ?? [],
+      anchorImageId: null,
     }),
   setSelectedReferenceIds: (ids) => set({ selectedReferenceIds: ids }),
   setSlot: (key, value) =>
@@ -77,5 +85,6 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setWeather: (weather) => set({ weather }),
   setSeason: (season) => set({ season }),
   setTimeOfDay: (time) => set({ timeOfDay: time }),
+  setAnchorImageId: (id) => set({ anchorImageId: id }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),
 }));

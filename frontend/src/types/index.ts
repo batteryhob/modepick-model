@@ -186,6 +186,7 @@ export interface ComposeRequest {
   weather: Weather;
   season: Season;
   time_of_day: TimeOfDay;
+  anchor_image_id?: string | null;
 }
 
 export interface ComposeResponse {

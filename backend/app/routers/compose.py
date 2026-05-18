@@ -18,6 +18,10 @@ class ComposeRequest(BaseModel):
     weather: str = "AUTO"
     season: str = "AUTO"
     time_of_day: str = "AUTO"
+    # When set, this is a previously-generated image (typically a result the
+    # user wants to use as the basis for a variation series — same person /
+    # outfit / styling, different view or scene).
+    anchor_image_id: str | None = None
 
 
 @router.post("/compose", status_code=202)
@@ -35,6 +39,7 @@ def compose(req: ComposeRequest, background_tasks: BackgroundTasks):
             weather=req.weather,
             season=req.season,
             time_of_day=req.time_of_day,
+            anchor_image_id=req.anchor_image_id,
         )
         background_tasks.add_task(run_compose_job, job_id)
 

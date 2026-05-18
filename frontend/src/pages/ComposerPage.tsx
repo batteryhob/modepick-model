@@ -104,6 +104,8 @@ export default function ComposerPage() {
     setSeason,
     timeOfDay,
     setTimeOfDay,
+    anchorImageId,
+    setAnchorImageId,
   } = useComposerStore();
 
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
@@ -279,6 +281,7 @@ export default function ComposerPage() {
       weather,
       season,
       time_of_day: timeOfDay,
+      anchor_image_id: anchorImageId,
     });
   };
 
@@ -646,6 +649,30 @@ export default function ComposerPage() {
           </div>
         )}
 
+        {/* Active anchor indicator — visible whenever an anchor is set,
+            even if it isn't the currently displayed result. Lets the user
+            see at a glance "I'm building a series locked to that image." */}
+        {anchorImageId && (
+          <div className="border border-amber-200 bg-amber-50 rounded-md p-2 flex items-center gap-2 text-xs">
+            <img
+              src={imageUrl(anchorImageId)}
+              alt="앵커"
+              className="w-10 h-10 rounded object-cover flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0 leading-snug">
+              <p className="font-medium text-amber-800">앵커 활성</p>
+              <p className="text-amber-700">다음 합성이 이 룩을 유지합니다</p>
+            </div>
+            <button
+              onClick={() => setAnchorImageId(null)}
+              className="text-amber-700 hover:text-amber-900 px-1 text-base leading-none"
+              aria-label="앵커 해제"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Generate Button */}
         <button
           onClick={handleGenerate}
@@ -710,13 +737,21 @@ export default function ComposerPage() {
 
         {/* Result Actions */}
         {resultImageId && (
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-3 flex-wrap justify-center">
             <button
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50"
+              onClick={() =>
+                setAnchorImageId(
+                  anchorImageId === resultImageId ? null : resultImageId,
+                )
+              }
+              title="이 이미지를 다음 합성의 레퍼런스로 고정해서 같은 룩의 변주를 만듭니다"
+              className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                anchorImageId === resultImageId
+                  ? "bg-amber-100 border border-amber-300 text-amber-800 hover:bg-amber-200"
+                  : "border hover:bg-gray-50"
+              }`}
             >
-              다시 생성
+              {anchorImageId === resultImageId ? "✓ 앵커됨" : "앵커"}
             </button>
             <button
               onClick={handleSaveToFeed}
