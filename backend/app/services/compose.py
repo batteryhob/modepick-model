@@ -42,36 +42,51 @@ COMPOSE_ROLES_BY_PRIORITY = [
 ]
 
 # Camera framing / shot type the user can choose for the compose result.
-# Each value maps to a prompt fragment that instructs the model on framing.
+# Each value spells out an EXPLICIT crop boundary because gpt-image-2
+# defaults to tighter framing than requested (it loves face / identity
+# shots). Each prompt names what MUST be visible and what must NOT be
+# cropped, leaving the model less room to default toward close-ups.
 VIEW_PROMPTS: dict[str, str] = {
     "FULL_BODY": (
-        "Full-body shot, entire figure visible from head to feet, "
-        "natural standing pose, vertical composition."
+        "Full-body shot — the ENTIRE figure must be visible from the top of "
+        "the head all the way down to the feet. Feet, ankles, and full legs "
+        "MUST be in frame. The subject is NOT cropped at the waist, hips, "
+        "thighs, or knees. Leave generous space around the figure so the "
+        "whole body sits comfortably in the frame. Wide vertical composition."
     ),
     "HALF_BODY": (
-        "Half-body shot from waist up, medium framing, natural pose."
+        "Half-body shot — frame from the TOP OF THE HEAD down to about the "
+        "waist or hip. Top of head and full torso must be visible. Arms and "
+        "shoulders clearly visible. This is a MEDIUM shot, NOT a close-up of "
+        "the face."
     ),
     "THREE_QUARTER": (
-        "Three-quarter shot from knees up, dynamic body angle, slight body turn."
+        "Three-quarter shot — frame from the top of the head down to "
+        "approximately mid-thigh or just above the knee. Most of the body "
+        "visible but cropped below the knee. NOT a close-up. NOT a full-body."
     ),
     "CLOSE_UP": (
-        "Close-up portrait, head and shoulders only, intimate editorial framing."
+        "Close-up portrait — head and shoulders fill the frame. Tight, "
+        "intimate framing focused on the face."
     ),
     "PROFILE": (
-        "Side profile view, subject facing 90 degrees away from camera, "
-        "showcasing silhouette and outfit from the side."
+        "Side profile view — subject facing 90 degrees away from camera. "
+        "Half-body to three-quarter framing showing the silhouette of head, "
+        "torso, and outfit from the side."
     ),
     "BACK": (
-        "Back view, subject facing away from camera, "
-        "highlighting outfit details from behind."
+        "Back view — subject facing entirely away from the camera. Wide "
+        "framing (three-quarter to full-body) showing the outfit from behind."
     ),
     "HIGH_ANGLE": (
-        "High angle shot, camera positioned above the subject looking down, "
-        "subject looking up or slightly sideways."
+        "High angle shot — camera positioned above the subject looking down. "
+        "Wide enough framing to show the subject's upper body and head from "
+        "above, not just the face."
     ),
     "LOW_ANGLE": (
-        "Low angle shot, camera positioned below the subject looking up, "
-        "dramatic perspective emphasizing height."
+        "Low angle shot — camera positioned below the subject looking up. "
+        "Wide framing emphasizing the height of the figure, showing torso "
+        "and head from below."
     ),
 }
 DEFAULT_VIEW = "FULL_BODY"
@@ -254,9 +269,9 @@ POSE_POOL = [
 
 COMPOSITION_POOL = [
     "Off-center composition placing the subject around the rule-of-thirds line with natural negative space, slight intentional asymmetry as if not framed perfectly.",
-    "Tight crop that doesn't include the full body - some part of the subject extends past the frame edge, like a real candid grabbed in the moment.",
     "Subject placed slightly low in the frame with environment occupying upper third, cinematic widescreen-feel even within 4:5.",
     "Foreground element slightly out of focus near the edge of frame (a hand, doorway, piece of furniture), giving depth and accidental-real composition.",
+    "Generous environmental context around the subject — the room or street around them is visible, not just the figure pressed against the frame edges.",
 ]
 
 SKIN_AND_TEXTURE_DIRECTIVE = (
@@ -264,6 +279,26 @@ SKIN_AND_TEXTURE_DIRECTIVE = (
     "slight redness in cheeks, faint asymmetry between left and right side of "
     "face. Skin tone varies slightly between face, neck, and hands. Absolutely "
     "no beauty retouching, no smoothing filter, no airbrushed plastic skin."
+)
+
+# Face realism — targets the deeper AI tells beyond skin texture: symmetric
+# features, doll-like proportions, glassy eyes, perfectly-aligned mouths.
+# The single biggest issue is the model's default "model / actor /
+# photoshoot face" bias. This directive explicitly asks for ordinary
+# imperfect features and named asymmetries so the model can't default to
+# the polished face.
+FACE_REALISM_DIRECTIVE = (
+    "Face: a real ordinary person, NOT a model or actor. Build in subtle "
+    "natural asymmetry — eyebrows at slightly different heights, one eye "
+    "marginally different from the other, mouth corners not perfectly level, "
+    "nostrils not identical. Eyes: natural redness in the tear-duct corners, "
+    "faintly visible blood vessels in the whites, iris with organic texture "
+    "(not gem-clear), catchlights asymmetric from the actual key light. "
+    "Mouth: natural lip texture with subtle vertical lines; if teeth show, "
+    "they have slight color variation rather than uniform white. Hair: "
+    "natural fly-aways and individual strand variation, not photoshoot-perfect "
+    "placement. Avoid doll-like proportions, oversized eyes, overly defined "
+    "jawline, glassy/plastic appearance, or beauty-filter face."
 )
 
 FILM_STOCK_POOL = [
@@ -291,14 +326,17 @@ STYLE_REFS = [
 
 NEGATIVE_DIRECTIVE_EDITORIAL = (
     "Avoid: AI-generated look, plastic skin, perfectly symmetric features, "
+    "doll-like face, oversized eyes, model / actor / photoshoot face, "
     "glamour-shot pose, influencer-perfect smile, photoshopped retouching, "
     "stock-photo composition, oversaturated digital colors, dead-center "
-    "passport-photo framing."
+    "passport-photo framing, AND ESPECIALLY do NOT crop the subject tighter "
+    "than the requested framing — respect the view directive's crop boundary."
 )
 NEGATIVE_DIRECTIVE_PHONE = (
     "Avoid: glossy editorial polish, professional studio look, perfect skin "
-    "retouching, model-photoshoot pose - this should look like a casual phone "
-    "photo, not a magazine cover."
+    "retouching, model-photoshoot pose — this should look like a casual "
+    "phone photo, not a magazine cover. Also avoid cropping the subject "
+    "tighter than the requested framing."
 )
 
 PHONE_LIGHTING_POOL = [
@@ -332,6 +370,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
                 FACE_LIGHTING_DIRECTIVE,
                 pose,
                 SKIN_AND_TEXTURE_DIRECTIVE,
+                FACE_REALISM_DIRECTIVE,
                 NEGATIVE_DIRECTIVE_PHONE,
             ],
             {"mode": "phone", "lighting": lighting, "pose": pose},
@@ -351,6 +390,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
             pose,
             composition,
             SKIN_AND_TEXTURE_DIRECTIVE,
+            FACE_REALISM_DIRECTIVE,
             film,
             style_ref,
             NEGATIVE_DIRECTIVE_EDITORIAL,
@@ -494,12 +534,13 @@ def _build_compose_prompt(
         )
     else:
         # Mood-dominant: keep only the universal anti-AI cues that don't
-        # impose lighting/composition/film of their own. Face-lighting
-        # directive stays — it's about REJECTING beauty-box flat light,
-        # which is universally beneficial and doesn't conflict with the
-        # mood ref's color/atmosphere choices.
+        # impose lighting/composition/film of their own. Face directives
+        # (lighting / texture / realism) are about REJECTING the polished
+        # AI default look — universally beneficial and don't conflict
+        # with the mood ref's aesthetic choices.
         lines.append(FACE_LIGHTING_DIRECTIVE)
         lines.append(SKIN_AND_TEXTURE_DIRECTIVE)
+        lines.append(FACE_REALISM_DIRECTIVE)
         lines.append(NEGATIVE_DIRECTIVE_EDITORIAL)
         final_look = "photorealistic, matching the mood reference's overall look"
 
