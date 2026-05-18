@@ -15,6 +15,31 @@ from app.services.storage import storage_service
 logger = logging.getLogger(__name__)
 
 
+class OpenAIProviderError(Exception):
+    """Raised when OpenAI image API returns a non-2xx. Carries the parsed
+    error so downstream layers can surface a useful message to the user
+    (especially for moderation_blocked, which is policy not bug)."""
+
+    def __init__(self, status_code: int, body: str):
+        self.status_code = status_code
+        self.body = body
+        message = body
+        # OpenAI returns structured JSON for errors; pull the human message
+        # out if present so the job's error_message is readable.
+        try:
+            import json
+
+            parsed = json.loads(body)
+            err = parsed.get("error") if isinstance(parsed, dict) else None
+            if err:
+                code = err.get("code") or err.get("type") or ""
+                msg = err.get("message") or ""
+                message = f"[{code}] {msg}" if code else msg
+        except Exception:
+            pass
+        super().__init__(f"OpenAI {status_code}: {message}")
+
+
 # GPT Image models return b64_json by default and use output_format for file type.
 
 OPENAI_IMAGE_MODEL = "gpt-image-2"
@@ -120,7 +145,7 @@ class OpenAIProvider(ImageGenProvider):
             )
             if resp.status_code != 200:
                 logger.error("OpenAI generations error %s: %s", resp.status_code, resp.text)
-                resp.raise_for_status()
+                raise OpenAIProviderError(resp.status_code, resp.text)
             data = resp.json()
 
         assets = []
@@ -173,7 +198,7 @@ class OpenAIProvider(ImageGenProvider):
             )
             if resp.status_code != 200:
                 logger.error("OpenAI edits error %s: %s", resp.status_code, resp.text)
-                resp.raise_for_status()
+                raise OpenAIProviderError(resp.status_code, resp.text)
             data = resp.json()
 
         assets = []

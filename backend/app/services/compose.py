@@ -200,14 +200,19 @@ FILM_STOCK_POOL = [
     "Fujifilm Superia 400 - slight green/teal lean in shadows, natural mid-range, the look of everyday film photos.",
 ]
 
-PHOTOGRAPHER_REFS = [
-    "in the style of Petra Collins - dreamy candid intimacy, soft pastel tones, youthful naturalism",
-    "in the style of Tyler Mitchell - youthful editorial naturalism, soft natural light, relaxed authentic posture",
-    "in the style of Vivian Maier - observational street portraiture, real-life moments caught without performance",
-    "in the style of Wim Wenders cinematic documentary - quiet stillness, environmental context, painterly composition",
-    "in the style of an i-D Magazine street editorial - fashion-aware but candid, slightly imperfect, real",
-    "in the style of a Korean indie editorial photographer - soft minimalism, restrained palette, quiet emotion",
-    "in the style of Annie Leibovitz portrait - environmental storytelling, distinctive lighting, the subject as a person not a model",
+# Aesthetic style references — phrased as descriptive directions rather
+# than named people. OpenAI's image API blocks requests that reference
+# real living photographers / celebrities ("moderation_blocked"), so we
+# describe the LOOK directly instead of naming the artist behind it.
+STYLE_REFS = [
+    "dreamy candid intimacy, soft pastel color palette, youthful naturalism, slightly hazy soft focus",
+    "youthful editorial naturalism — soft natural light, relaxed authentic posture, fashion-aware but unforced",
+    "observational street portraiture style — real-life moments caught without performance, documentary feel",
+    "cinematic documentary stillness — quiet contemplative mood, environmental context, painterly composition",
+    "street fashion editorial style — fashion-aware but candid, slightly imperfect framing, real",
+    "Korean indie editorial style — soft minimalism, restrained muted palette, quiet emotion",
+    "environmental portrait style — telling a story with the setting, distinctive directional lighting, the subject feels like a real person not a model",
+    "lo-fi indie zine style — slightly grainy, intimate, casual everyday glamour without polish",
 ]
 
 NEGATIVE_DIRECTIVE_EDITORIAL = (
@@ -261,7 +266,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
     pose = random.choice(POSE_POOL)
     composition = random.choice(COMPOSITION_POOL)
     film = random.choice(FILM_STOCK_POOL)
-    photographer = random.choice(PHOTOGRAPHER_REFS)
+    style_ref = random.choice(STYLE_REFS)
     return (
         [
             OPENER_EDITORIAL,
@@ -271,7 +276,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
             composition,
             SKIN_AND_TEXTURE_DIRECTIVE,
             film,
-            photographer,
+            style_ref,
             NEGATIVE_DIRECTIVE_EDITORIAL,
         ],
         {
@@ -280,7 +285,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
             "pose": pose,
             "composition": composition,
             "film": film,
-            "photographer": photographer,
+            "style_ref": style_ref,
         },
     )
 
