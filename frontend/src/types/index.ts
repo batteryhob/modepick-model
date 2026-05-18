@@ -56,6 +56,7 @@ export interface WardrobeItem {
 }
 
 export type WardrobeCategory =
+  | "hat"
   | "top"
   | "bottom"
   | "outerwear"
@@ -143,6 +144,7 @@ export interface FeedPostUpdate {
 }
 
 export interface ComposerSlots {
+  hat: string | null;
   top: string | null;
   bottom: string | null;
   outerwear: string | null;

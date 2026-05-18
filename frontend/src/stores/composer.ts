@@ -52,6 +52,7 @@ interface ComposerState {
 }
 
 const emptySlots: ComposerSlots = {
+  hat: null,
   top: null,
   bottom: null,
   outerwear: null,

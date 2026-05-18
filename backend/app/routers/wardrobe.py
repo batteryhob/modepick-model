@@ -7,7 +7,7 @@ from app.services.storage import storage_service
 
 router = APIRouter(prefix="/api/wardrobe", tags=["wardrobe"])
 
-VALID_CATEGORIES = {"top", "bottom", "outerwear", "dress", "bag", "shoes"}
+VALID_CATEGORIES = {"hat", "top", "bottom", "outerwear", "dress", "bag", "shoes"}
 MAX_IMAGES_PER_ITEM = 8
 
 

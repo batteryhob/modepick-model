@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 REFERENCE_LIMITS = {"openai": 16, "gemini": 14}
 
-SLOT_CATEGORIES = ["top", "bottom", "outerwear", "dress", "bag", "shoes"]
+SLOT_CATEGORIES = ["hat", "top", "bottom", "outerwear", "dress", "bag", "shoes"]
 
 # Order mirrors character.py — identity refs first (face from multiple
 # angles + expressions), body shots last. This means picking N character

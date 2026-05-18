@@ -7,6 +7,7 @@ import type { WardrobeCategory, WardrobeItem, WardrobeItemImage } from "@/types"
 
 const CATEGORIES: { value: WardrobeCategory | "all"; label: string }[] = [
   { value: "all", label: "전체" },
+  { value: "hat", label: "모자" },
   { value: "top", label: "상의" },
   { value: "bottom", label: "하의" },
   { value: "outerwear", label: "아우터" },

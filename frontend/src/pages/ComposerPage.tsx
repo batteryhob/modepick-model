@@ -18,6 +18,7 @@ import IconButton from "@/components/IconButton";
 import LibraryPicker from "@/components/LibraryPicker";
 
 const WARDROBE_SLOTS: { key: keyof ComposerSlots; label: string; color: string }[] = [
+  { key: "hat", label: "HAT", color: "border-l-emerald-500" },
   { key: "top", label: "TOP", color: "border-l-emerald-500" },
   { key: "bottom", label: "BOTTOM", color: "border-l-emerald-500" },
   { key: "outerwear", label: "OUTERWEAR", color: "border-l-emerald-500" },
