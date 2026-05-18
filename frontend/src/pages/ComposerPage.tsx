@@ -514,13 +514,28 @@ export default function ComposerPage() {
           </div>
         </div>
 
+        {/* When mood is set it overrides the parametric knobs below — they
+            become greyed out + disabled, and a small note explains why. */}
+        {slots.mood && (
+          <div className="border border-amber-200 bg-amber-50 rounded-lg p-2.5 text-xs text-amber-700 leading-snug">
+            무드 적용 중 — 뷰·캡처·환경은 무드 이미지에서 자동 추론됩니다.
+            <br />
+            세부 조정하려면 무드를 비우세요.
+          </div>
+        )}
+
         {/* View */}
-        <div className="border rounded-lg p-3 bg-white">
+        <div
+          className={`border rounded-lg p-3 bg-white transition-opacity ${
+            slots.mood ? "opacity-40" : ""
+          }`}
+        >
           <p className="text-xs font-mono text-gray-400 mb-1">뷰 / 샷 타입</p>
           <select
             value={view}
             onChange={(e) => setView(e.target.value as ComposeView)}
-            className="w-full text-sm border-0 p-0 focus:ring-0 focus:outline-none bg-transparent"
+            disabled={!!slots.mood}
+            className="w-full text-sm border-0 p-0 focus:ring-0 focus:outline-none bg-transparent disabled:cursor-not-allowed"
           >
             {VIEW_OPTIONS.map((v) => (
               <option key={v.value} value={v.value}>
@@ -531,12 +546,17 @@ export default function ComposerPage() {
         </div>
 
         {/* Capture style — who took the photo */}
-        <div className="border rounded-lg p-3 bg-white">
+        <div
+          className={`border rounded-lg p-3 bg-white transition-opacity ${
+            slots.mood ? "opacity-40" : ""
+          }`}
+        >
           <p className="text-xs font-mono text-gray-400 mb-1">캡처 스타일</p>
           <select
             value={captureStyle}
             onChange={(e) => setCaptureStyle(e.target.value as CaptureStyle)}
-            className="w-full text-sm border-0 p-0 focus:ring-0 focus:outline-none bg-transparent"
+            disabled={!!slots.mood}
+            className="w-full text-sm border-0 p-0 focus:ring-0 focus:outline-none bg-transparent disabled:cursor-not-allowed"
           >
             {CAPTURE_STYLE_OPTIONS.map((c) => (
               <option key={c.value} value={c.value}>
@@ -547,13 +567,18 @@ export default function ComposerPage() {
         </div>
 
         {/* Environment context — weather / season / time of day */}
-        <div className="border rounded-lg p-3 bg-white space-y-2">
+        <div
+          className={`border rounded-lg p-3 bg-white space-y-2 transition-opacity ${
+            slots.mood ? "opacity-40" : ""
+          }`}
+        >
           <p className="text-xs font-mono text-gray-400">환경</p>
           <div className="grid grid-cols-3 gap-2">
             <select
               value={weather}
               onChange={(e) => setWeather(e.target.value as Weather)}
-              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              disabled={!!slots.mood}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent disabled:cursor-not-allowed"
               aria-label="날씨"
             >
               {WEATHER_OPTIONS.map((o) => (
@@ -565,7 +590,8 @@ export default function ComposerPage() {
             <select
               value={season}
               onChange={(e) => setSeason(e.target.value as Season)}
-              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              disabled={!!slots.mood}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent disabled:cursor-not-allowed"
               aria-label="계절"
             >
               {SEASON_OPTIONS.map((o) => (
@@ -577,7 +603,8 @@ export default function ComposerPage() {
             <select
               value={timeOfDay}
               onChange={(e) => setTimeOfDay(e.target.value as TimeOfDay)}
-              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              disabled={!!slots.mood}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent disabled:cursor-not-allowed"
               aria-label="시간대"
             >
               {TIME_OF_DAY_OPTIONS.map((o) => (

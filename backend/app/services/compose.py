@@ -401,10 +401,20 @@ def _build_compose_prompt(
             f"the overall aesthetic. Style: {style}. Color palette: {palette}."
         )
 
-    if mood and mood_ref_position is not None:
+    # Mood is the dominant aesthetic signal when present — it carries the
+    # complete visual vibe (lighting, color, time-of-day feel, framing,
+    # film look). When the user picks a mood reference, we lean fully on
+    # it and skip the parametric knobs (view / capture / weather / season
+    # / time / photo-realism pool) so they don't fight the mood. Skin
+    # texture + anti-AI negatives still apply at the end.
+    mood_active = mood is not None and mood_ref_position is not None
+    if mood_active:
         lines.append(
-            f"Apply the lighting, color grading, and atmosphere from reference image {mood_ref_position}. "
-            "Do NOT copy the people or objects from this reference, only the mood/lighting."
+            f"Apply the COMPLETE visual aesthetic from reference image {mood_ref_position} "
+            "— lighting, color grading, atmosphere, framing and composition, time-of-day "
+            "quality, film look, and overall mood. Match the reference's visual style "
+            "exactly. Do NOT copy the people or objects from this reference, only its "
+            "aesthetic."
         )
 
     if location and location_ref_positions:
@@ -423,33 +433,39 @@ def _build_compose_prompt(
                 "details consistently — this is a recurring place the subject frequents."
             )
 
-    # Environment context — weather / season / time of day. Each is opt-in
-    # ("AUTO" means no directive). These slot between the location and the
-    # user's free-form scene so they read as setting context.
-    if weather in WEATHER_PROMPTS:
-        lines.append(WEATHER_PROMPTS[weather])
-    if season in SEASON_PROMPTS:
-        lines.append(SEASON_PROMPTS[season])
-    if time_of_day in TIME_OF_DAY_PROMPTS:
-        lines.append(TIME_OF_DAY_PROMPTS[time_of_day])
+    # Environment + parametric knobs only apply when mood isn't dominating.
+    if not mood_active:
+        if weather in WEATHER_PROMPTS:
+            lines.append(WEATHER_PROMPTS[weather])
+        if season in SEASON_PROMPTS:
+            lines.append(SEASON_PROMPTS[season])
+        if time_of_day in TIME_OF_DAY_PROMPTS:
+            lines.append(TIME_OF_DAY_PROMPTS[time_of_day])
 
     if scene:
-        # Free-form prompt addition from the user (scene description, extra
-        # styling directives, accessories, mood notes — anything they type).
+        # Free-form prompt addition from the user, always honored.
         lines.append(scene)
 
-    lines.append(VIEW_PROMPTS[view])
-    if capture_style in CAPTURE_STYLE_PROMPTS:
-        lines.append(CAPTURE_STYLE_PROMPTS[capture_style])
-    # Photo-realism directives — randomly sampled per call from layered pools.
-    realism_lines, _picks = _photorealism_directives(capture_style)
-    lines.extend(realism_lines)
-    final_look = (
-        "indistinguishable from a real phone photo"
-        if capture_style in ("SELFIE", "MIRROR_SELFIE")
-        else "indistinguishable from a real DSLR photograph"
-    )
-    lines.append(f"4:5 aspect ratio, photorealistic, {final_look}.")
+    if not mood_active:
+        lines.append(VIEW_PROMPTS[view])
+        if capture_style in CAPTURE_STYLE_PROMPTS:
+            lines.append(CAPTURE_STYLE_PROMPTS[capture_style])
+        # Full randomized photo-realism block (lighting/pose/film/style_ref).
+        realism_lines, _picks = _photorealism_directives(capture_style)
+        lines.extend(realism_lines)
+        final_look = (
+            "indistinguishable from a real phone photo"
+            if capture_style in ("SELFIE", "MIRROR_SELFIE")
+            else "indistinguishable from a real DSLR photograph"
+        )
+    else:
+        # Mood-dominant: keep only the universal anti-AI cues that don't
+        # impose lighting/composition/film of their own.
+        lines.append(SKIN_AND_TEXTURE_DIRECTIVE)
+        lines.append(NEGATIVE_DIRECTIVE_EDITORIAL)
+        final_look = "photorealistic, matching the mood reference's overall look"
+
+    lines.append(f"4:5 aspect ratio, {final_look}.")
 
     return "\n".join(lines)
 
