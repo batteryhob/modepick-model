@@ -85,6 +85,61 @@ def _resolve_view(view: str | None) -> str:
     return DEFAULT_VIEW
 
 
+# Weather — environmental condition that affects lighting, ground texture,
+# wardrobe context, and mood. AUTO leaves it to the model + scene.
+WEATHER_PROMPTS: dict[str, str] = {
+    "SUNNY": "Bright clear sunny day with hard directional light and sharp shadows.",
+    "CLOUDY": "Overcast cloudy sky, soft diffused light, no harsh shadows, slight cool color cast.",
+    "RAINY": "Rainy day, wet pavement and reflections, light drizzle in the air, muted desaturated palette.",
+    "SNOWING": "Snow falling, snow on the ground and surfaces, soft cool white light, winter mood.",
+    "FOG": "Foggy misty atmosphere, low visibility, soft hazy diffused light, quiet mysterious mood.",
+    "GOLDEN_SUNSET": "Golden hour at sunset, warm orange light pouring in from a low angle, long soft shadows.",
+    "BLUE_HOUR": "Blue hour twilight, mixed warm artificial lights and cool ambient sky.",
+}
+DEFAULT_WEATHER = "AUTO"
+
+
+def _resolve_weather(weather: str | None) -> str:
+    if weather and weather in WEATHER_PROMPTS:
+        return weather
+    return DEFAULT_WEATHER
+
+
+# Season — affects foliage, clothing context, light quality, ground state.
+SEASON_PROMPTS: dict[str, str] = {
+    "SPRING": "Spring season — cherry blossoms or fresh light-green foliage, soft pastel light, mild temperature, light layers.",
+    "SUMMER": "Summer season — deep green foliage, strong direct sun, warm vibrant colors, summer clothing context.",
+    "AUTUMN": "Autumn season — fallen leaves in warm orange/red/yellow tones, cooler temperature, sweater and jacket weather.",
+    "WINTER": "Winter season — bare trees, cold quality of light, frost or snow on surfaces, heavy coat and scarf context.",
+}
+DEFAULT_SEASON = "AUTO"
+
+
+def _resolve_season(season: str | None) -> str:
+    if season and season in SEASON_PROMPTS:
+        return season
+    return DEFAULT_SEASON
+
+
+# Time of day — affects light direction, color temperature, ambient mood.
+# Overlaps somewhat with the realism lighting pool but exposed explicitly
+# so the user can lock a consistent time across a feed series.
+TIME_OF_DAY_PROMPTS: dict[str, str] = {
+    "DAWN": "Just after dawn — very early morning soft cold light, quiet empty streets, mist still in the air.",
+    "MORNING": "Mid-morning — fresh natural light, daytime energy, crisp colors.",
+    "AFTERNOON": "Afternoon — full daylight, casual midday atmosphere.",
+    "EVENING": "Early evening — low warm light, end-of-day mood, lengthening shadows.",
+    "NIGHT": "Night — dark sky, streetlights and practical interior lights, urban evening vibe.",
+}
+DEFAULT_TIME_OF_DAY = "AUTO"
+
+
+def _resolve_time_of_day(value: str | None) -> str:
+    if value and value in TIME_OF_DAY_PROMPTS:
+        return value
+    return DEFAULT_TIME_OF_DAY
+
+
 # Capture style — independent of view/framing. Tells the model WHO is
 # holding the camera and what (if any) device is visible in the shot.
 # Combined freely with any view: e.g. MIRROR_SELFIE + FULL_BODY = the
@@ -304,6 +359,9 @@ def _build_compose_prompt(
     location_ref_positions: list[int],
     view: str,
     capture_style: str,
+    weather: str,
+    season: str,
+    time_of_day: str,
 ) -> str:
     lines = []
 
@@ -365,6 +423,16 @@ def _build_compose_prompt(
                 "details consistently — this is a recurring place the subject frequents."
             )
 
+    # Environment context — weather / season / time of day. Each is opt-in
+    # ("AUTO" means no directive). These slot between the location and the
+    # user's free-form scene so they read as setting context.
+    if weather in WEATHER_PROMPTS:
+        lines.append(WEATHER_PROMPTS[weather])
+    if season in SEASON_PROMPTS:
+        lines.append(SEASON_PROMPTS[season])
+    if time_of_day in TIME_OF_DAY_PROMPTS:
+        lines.append(TIME_OF_DAY_PROMPTS[time_of_day])
+
     if scene:
         # Free-form prompt addition from the user (scene description, extra
         # styling directives, accessories, mood notes — anything they type).
@@ -396,9 +464,15 @@ def _prepare_compose_inputs(
     character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
     capture_style: str = DEFAULT_CAPTURE_STYLE,
+    weather: str = DEFAULT_WEATHER,
+    season: str = DEFAULT_SEASON,
+    time_of_day: str = DEFAULT_TIME_OF_DAY,
 ) -> dict:
     view = _resolve_view(view)
     capture_style = _resolve_capture_style(capture_style)
+    weather = _resolve_weather(weather)
+    season = _resolve_season(season)
+    time_of_day = _resolve_time_of_day(time_of_day)
     # 1. Load character + references
     character = session.get(Character, character_id)
     if not character:
@@ -515,6 +589,9 @@ def _prepare_compose_inputs(
         location_ref_positions,
         view,
         capture_style,
+        weather,
+        season,
+        time_of_day,
     )
 
     return {
@@ -523,6 +600,9 @@ def _prepare_compose_inputs(
         "selected_char_refs": selected_char_refs,
         "view": view,
         "capture_style": capture_style,
+        "weather": weather,
+        "season": season,
+        "time_of_day": time_of_day,
     }
 
 
@@ -535,6 +615,9 @@ def enqueue_compose_look(
     character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
     capture_style: str = DEFAULT_CAPTURE_STYLE,
+    weather: str = DEFAULT_WEATHER,
+    season: str = DEFAULT_SEASON,
+    time_of_day: str = DEFAULT_TIME_OF_DAY,
 ) -> str:
     with Session(engine) as session:
         prepared = _prepare_compose_inputs(
@@ -547,6 +630,9 @@ def enqueue_compose_look(
             character_reference_ids,
             view,
             capture_style,
+            weather,
+            season,
+            time_of_day,
         )
         references = prepared["references"]
         prompt = prepared["prompt"]
@@ -569,6 +655,9 @@ def enqueue_compose_look(
                 "quality": quality,
                 "view": resolved_view,
                 "capture_style": resolved_capture_style,
+                "weather": prepared["weather"],
+                "season": prepared["season"],
+                "time_of_day": prepared["time_of_day"],
             },
             provider=provider_name,
             model=f"{provider_name}-image",

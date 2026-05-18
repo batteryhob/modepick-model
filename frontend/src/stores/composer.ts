@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { CaptureStyle, ComposerSlots, ComposeView } from "@/types";
+import type {
+  CaptureStyle,
+  ComposerSlots,
+  ComposeView,
+  Season,
+  TimeOfDay,
+  Weather,
+} from "@/types";
 
 interface ComposerState {
   activeCharacterId: string | null;
@@ -10,6 +17,9 @@ interface ComposerState {
   quality: "low" | "medium" | "high";
   view: ComposeView;
   captureStyle: CaptureStyle;
+  weather: Weather;
+  season: Season;
+  timeOfDay: TimeOfDay;
 
   setActiveCharacter: (id: string | null, referenceIds?: string[]) => void;
   setSelectedReferenceIds: (ids: string[]) => void;
@@ -19,6 +29,9 @@ interface ComposerState {
   setQuality: (quality: "low" | "medium" | "high") => void;
   setView: (view: ComposeView) => void;
   setCaptureStyle: (style: CaptureStyle) => void;
+  setWeather: (weather: Weather) => void;
+  setSeason: (season: Season) => void;
+  setTimeOfDay: (time: TimeOfDay) => void;
   clearSlots: () => void;
 }
 
@@ -42,6 +55,9 @@ export const useComposerStore = create<ComposerState>((set) => ({
   quality: "medium",
   view: "RANDOM",
   captureStyle: "AUTO",
+  weather: "AUTO",
+  season: "AUTO",
+  timeOfDay: "AUTO",
 
   setActiveCharacter: (id, referenceIds) =>
     set({
@@ -58,5 +74,8 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setQuality: (quality) => set({ quality }),
   setView: (view) => set({ view }),
   setCaptureStyle: (style) => set({ captureStyle: style }),
+  setWeather: (weather) => set({ weather }),
+  setSeason: (season) => set({ season }),
+  setTimeOfDay: (time) => set({ timeOfDay: time }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),
 }));

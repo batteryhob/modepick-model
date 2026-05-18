@@ -154,6 +154,26 @@ export type ComposeView =
 
 export type CaptureStyle = "AUTO" | "SELFIE" | "MIRROR_SELFIE" | "BY_OTHER";
 
+export type Weather =
+  | "AUTO"
+  | "SUNNY"
+  | "CLOUDY"
+  | "RAINY"
+  | "SNOWING"
+  | "FOG"
+  | "GOLDEN_SUNSET"
+  | "BLUE_HOUR";
+
+export type Season = "AUTO" | "SPRING" | "SUMMER" | "AUTUMN" | "WINTER";
+
+export type TimeOfDay =
+  | "AUTO"
+  | "DAWN"
+  | "MORNING"
+  | "AFTERNOON"
+  | "EVENING"
+  | "NIGHT";
+
 export interface ComposeRequest {
   character_id: string;
   slots: ComposerSlots;
@@ -163,6 +183,9 @@ export interface ComposeRequest {
   character_reference_ids: string[];
   view: ComposeView;
   capture_style: CaptureStyle;
+  weather: Weather;
+  season: Season;
+  time_of_day: TimeOfDay;
 }
 
 export interface ComposeResponse {

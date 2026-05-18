@@ -10,6 +10,9 @@ import type {
   ComposerSlots,
   ComposeView,
   CaptureStyle,
+  Weather,
+  Season,
+  TimeOfDay,
 } from "@/types";
 import IconButton from "@/components/IconButton";
 import LibraryPicker from "@/components/LibraryPicker";
@@ -42,6 +45,34 @@ const CAPTURE_STYLE_OPTIONS: { value: CaptureStyle; label: string }[] = [
   { value: "BY_OTHER", label: "남이 찍어준 사진" },
 ];
 
+const WEATHER_OPTIONS: { value: Weather; label: string }[] = [
+  { value: "AUTO", label: "자동" },
+  { value: "SUNNY", label: "맑음" },
+  { value: "CLOUDY", label: "흐림" },
+  { value: "RAINY", label: "비" },
+  { value: "SNOWING", label: "눈" },
+  { value: "FOG", label: "안개" },
+  { value: "GOLDEN_SUNSET", label: "노을 (golden hour)" },
+  { value: "BLUE_HOUR", label: "블루아워" },
+];
+
+const SEASON_OPTIONS: { value: Season; label: string }[] = [
+  { value: "AUTO", label: "자동" },
+  { value: "SPRING", label: "봄" },
+  { value: "SUMMER", label: "여름" },
+  { value: "AUTUMN", label: "가을" },
+  { value: "WINTER", label: "겨울" },
+];
+
+const TIME_OF_DAY_OPTIONS: { value: TimeOfDay; label: string }[] = [
+  { value: "AUTO", label: "자동" },
+  { value: "DAWN", label: "새벽" },
+  { value: "MORNING", label: "아침" },
+  { value: "AFTERNOON", label: "오후" },
+  { value: "EVENING", label: "저녁" },
+  { value: "NIGHT", label: "밤" },
+];
+
 // Rough mean per-image generation time at quality=medium with several refs,
 // based on observed jobs. Used to display an ETA during compose so the user
 // has a sense of "how long left" instead of a bare spinner.
@@ -67,6 +98,12 @@ export default function ComposerPage() {
     setView,
     captureStyle,
     setCaptureStyle,
+    weather,
+    setWeather,
+    season,
+    setSeason,
+    timeOfDay,
+    setTimeOfDay,
   } = useComposerStore();
 
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
@@ -239,6 +276,9 @@ export default function ComposerPage() {
       character_reference_ids: selectedReferenceIds,
       view,
       capture_style: captureStyle,
+      weather,
+      season,
+      time_of_day: timeOfDay,
     });
   };
 
@@ -504,6 +544,49 @@ export default function ComposerPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Environment context — weather / season / time of day */}
+        <div className="border rounded-lg p-3 bg-white space-y-2">
+          <p className="text-xs font-mono text-gray-400">환경</p>
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={weather}
+              onChange={(e) => setWeather(e.target.value as Weather)}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              aria-label="날씨"
+            >
+              {WEATHER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={season}
+              onChange={(e) => setSeason(e.target.value as Season)}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              aria-label="계절"
+            >
+              {SEASON_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={timeOfDay}
+              onChange={(e) => setTimeOfDay(e.target.value as TimeOfDay)}
+              className="text-xs border rounded-md px-1.5 py-1 bg-transparent"
+              aria-label="시간대"
+            >
+              {TIME_OF_DAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Free-form prompt (장소·소품·날씨·표정 등 무엇이든) */}

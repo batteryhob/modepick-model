@@ -15,6 +15,9 @@ class ComposeRequest(BaseModel):
     character_reference_ids: list[str] = []
     view: str = "RANDOM"
     capture_style: str = "AUTO"
+    weather: str = "AUTO"
+    season: str = "AUTO"
+    time_of_day: str = "AUTO"
 
 
 @router.post("/compose", status_code=202)
@@ -29,6 +32,9 @@ def compose(req: ComposeRequest, background_tasks: BackgroundTasks):
             character_reference_ids=req.character_reference_ids,
             view=req.view,
             capture_style=req.capture_style,
+            weather=req.weather,
+            season=req.season,
+            time_of_day=req.time_of_day,
         )
         background_tasks.add_task(run_compose_job, job_id)
 
