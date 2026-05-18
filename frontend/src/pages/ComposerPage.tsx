@@ -295,6 +295,18 @@ export default function ComposerPage() {
       image_id: resultImageId,
       slots,
       scene,
+      // Snapshot every compose-related knob so the feed page can later
+      // reload the full setup and let the user re-compose with edits.
+      compose_params: {
+        character_reference_ids: selectedReferenceIds,
+        view,
+        capture_style: captureStyle,
+        weather,
+        season,
+        time_of_day: timeOfDay,
+        anchor_image_id: anchorImageId,
+        quality,
+      },
     });
   };
 

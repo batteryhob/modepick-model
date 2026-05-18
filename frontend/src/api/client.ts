@@ -117,7 +117,11 @@ export const api = {
   feed: {
     list: (limit = 27, offset = 0) =>
       request<{ posts: FeedPost[]; total: number }>(`/api/feed?limit=${limit}&offset=${offset}`),
-    create: (data: Pick<FeedPost, "character_id" | "image_id" | "slots" | "scene">) =>
+    create: (
+      data: Pick<FeedPost, "character_id" | "image_id" | "slots" | "scene"> & {
+        compose_params?: FeedPost["compose_params"];
+      },
+    ) =>
       request<FeedPost>("/api/feed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

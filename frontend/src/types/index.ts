@@ -112,12 +112,24 @@ export interface CharacterCreateRequest {
   reference_count: number;
 }
 
+export interface ComposeParamsSnapshot {
+  character_reference_ids?: string[];
+  view?: ComposeView;
+  capture_style?: CaptureStyle;
+  weather?: Weather;
+  season?: Season;
+  time_of_day?: TimeOfDay;
+  anchor_image_id?: string | null;
+  quality?: "low" | "medium" | "high";
+}
+
 export interface FeedPost {
   id: string;
   character_id: string;
   image_id: string;
   slots: ComposerSlots;
   scene: string;
+  compose_params: ComposeParamsSnapshot;
   caption: string | null;
   hashtags: string[];
   posted_at: string | null;

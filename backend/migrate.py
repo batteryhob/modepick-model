@@ -63,6 +63,12 @@ def main() -> None:
             if "posted_at" not in feed_cols:
                 conn.exec_driver_sql("ALTER TABLE feed_post ADD COLUMN posted_at DATETIME")
                 print("[4c] Added feed_post.posted_at")
+            if "compose_params" not in feed_cols:
+                # Snapshot of compose state for "re-compose from this post".
+                conn.exec_driver_sql(
+                    "ALTER TABLE feed_post ADD COLUMN compose_params TEXT DEFAULT '{}'"
+                )
+                print("[4d] Added feed_post.compose_params")
 
     # Always run create_all to add any new tables.
     create_db_and_tables()

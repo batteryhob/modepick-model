@@ -218,13 +218,30 @@ OPENER_PHONE = (
 )
 
 LIGHTING_POOL = [
-    "Late afternoon window light from one side, soft directional falloff into gentle shadow on the opposite cheek, subtle warm cast.",
-    "Overcast diffused daylight, even soft shadows, slight cool blue-grey color cast, no direct sun.",
-    "Golden hour low-angle warm sun from the side, long soft shadows, amber-tinted highlights and warm skin tones.",
-    "Mixed indoor light - warm tungsten lamps alongside cool daylight from a window, naturalistic temperature shift across the frame.",
-    "Morning side light through a tall window, slightly cool, gentle directional shadows defining the face and shoulders.",
-    "Blue hour twilight, soft ambient sky light mixed with warm street lights, low contrast and atmospheric.",
+    "Late afternoon window light from one side — directional and uneven, sculpting cheekbone and jawline, deep shadow on the opposite half of the face, no fill light, slightly underexposed on the shadow side.",
+    "Overcast daylight from above — visible shadow under brows and chin, slight under-eye darkness, cool neutral cast, no symmetric fill light.",
+    "Golden hour low warm sun from one side — strong directional warm key light, hard shadow on the opposite cheek, slight rim glow on hair, real outdoor exposure (not lifted).",
+    "Mixed indoor practical lighting — warm tungsten lamp on one side and cool daylight from a window on the other, color-temperature split across the face, naturalistic uneven exposure.",
+    "Morning side light through a tall window — directional cool key, micro-shadows defining the nose bridge and jaw, no symmetric beauty fill.",
+    "Blue hour twilight with mixed warm street lights — atmospheric uneven face shadows, low overall light level, color contrast across the features.",
+    "Single overhead practical (pendant lamp or ceiling fixture) — top-down light with deep shadow pockets under brows and chin, dramatic but real indoor lighting.",
+    "Bounced indoor afternoon light, slightly under-lit overall — mid-tone face with low overall contrast, no harsh fill, the honestly imperfect exposure of a real grabbed phone moment.",
 ]
+
+# Permanent face-lighting directive — included in every editorial realism
+# block. The single biggest AI tell on portraits is "beauty-box" perfectly
+# even, symmetric face lighting that lifts every shadow for flattery.
+# Real cameras don't do that; pushing the model away from it is one of
+# the highest-leverage anti-AI cues available.
+FACE_LIGHTING_DIRECTIVE = (
+    "Face lighting: directional and uneven. Accept harder shadows on one "
+    "side of the face, visible micro-shadows under the brows / nose bridge "
+    "/ jaw / chin / lower lip, and a slightly under-lit shadow side. Do "
+    "NOT use beauty-box even illumination. Do NOT lift shadows for "
+    "flattering symmetry. Do NOT add fill light to even out the face. "
+    "Real cameras don't render HDR-flat face exposure — embrace honest "
+    "directional light with visible shadow detail."
+)
 
 POSE_POOL = [
     "Weight shifted to one hip in natural contrapposto, hands in relaxed unposed positions (not clasped, not on hips), head tilted a few degrees off-axis, gaze slightly off-camera as if at something just past the lens.",
@@ -312,6 +329,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
                 OPENER_PHONE,
                 _camera_signature(capture_style),
                 lighting,
+                FACE_LIGHTING_DIRECTIVE,
                 pose,
                 SKIN_AND_TEXTURE_DIRECTIVE,
                 NEGATIVE_DIRECTIVE_PHONE,
@@ -329,6 +347,7 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
             OPENER_EDITORIAL,
             _camera_signature(capture_style),
             lighting,
+            FACE_LIGHTING_DIRECTIVE,
             pose,
             composition,
             SKIN_AND_TEXTURE_DIRECTIVE,
@@ -475,7 +494,11 @@ def _build_compose_prompt(
         )
     else:
         # Mood-dominant: keep only the universal anti-AI cues that don't
-        # impose lighting/composition/film of their own.
+        # impose lighting/composition/film of their own. Face-lighting
+        # directive stays — it's about REJECTING beauty-box flat light,
+        # which is universally beneficial and doesn't conflict with the
+        # mood ref's color/atmosphere choices.
+        lines.append(FACE_LIGHTING_DIRECTIVE)
         lines.append(SKIN_AND_TEXTURE_DIRECTIVE)
         lines.append(NEGATIVE_DIRECTIVE_EDITORIAL)
         final_look = "photorealistic, matching the mood reference's overall look"

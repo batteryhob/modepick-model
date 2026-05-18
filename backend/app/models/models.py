@@ -167,6 +167,11 @@ class FeedPost(SQLModel, table=True):
     image_id: str = Field(foreign_key="image_asset.id")
     slots: dict = Field(default_factory=dict, sa_column=Column(JSON))
     scene: str = ""  # the free-form compose prompt the user entered
+    # Snapshot of the non-FeedPost-column compose params at save time:
+    # character_reference_ids, view, capture_style, weather, season,
+    # time_of_day, anchor_image_id, quality. Used to re-load the exact
+    # compose state ("이 설정으로 다시 합성") later.
+    compose_params: dict = Field(default_factory=dict, sa_column=Column(JSON))
     caption: Optional[str] = None  # IG caption draft
     hashtags: list = Field(default_factory=list, sa_column=Column(JSON))
     # When set, the user has marked this post as already published on

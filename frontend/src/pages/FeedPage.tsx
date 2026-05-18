@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { api, imageUrl } from "@/api/client";
 import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { useComposerStore } from "@/stores/composer";
 import type { FeedPost } from "@/types";
 
 export default function FeedPage() {
@@ -192,7 +194,21 @@ function CarouselViewer({
   onDelete,
   isDeleting,
 }: CarouselProps) {
+  const navigate = useNavigate();
+  const hydrateFromFeedPost = useComposerStore((s) => s.hydrateFromFeedPost);
   const post = posts[index];
+
+  const handleRecompose = () => {
+    if (!post) return;
+    hydrateFromFeedPost({
+      characterId: post.character_id,
+      slots: post.slots,
+      scene: post.scene,
+      params: post.compose_params,
+    });
+    onClose();
+    navigate("/composer");
+  };
   const hasPrev = index > 0;
   const hasNext = index < posts.length - 1;
   const showNav = posts.length > 1;
@@ -318,7 +334,14 @@ function CarouselViewer({
             ) : (
               <span />
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
+              <button
+                onClick={handleRecompose}
+                title="이 게시물의 모든 설정을 합성 페이지로 불러옵니다"
+                className="px-3 py-1.5 text-xs border rounded-md hover:bg-gray-50"
+              >
+                이 설정으로 합성
+              </button>
               <a
                 href={imageUrl(post.image_id)}
                 download={`feed_${post.id}.png`}

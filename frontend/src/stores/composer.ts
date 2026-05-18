@@ -1,12 +1,20 @@
 import { create } from "zustand";
 import type {
   CaptureStyle,
+  ComposeParamsSnapshot,
   ComposerSlots,
   ComposeView,
   Season,
   TimeOfDay,
   Weather,
 } from "@/types";
+
+interface HydrationInput {
+  characterId: string;
+  slots: ComposerSlots;
+  scene: string;
+  params: ComposeParamsSnapshot;
+}
 
 interface ComposerState {
   activeCharacterId: string | null;
@@ -37,6 +45,9 @@ interface ComposerState {
   setSeason: (season: Season) => void;
   setTimeOfDay: (time: TimeOfDay) => void;
   setAnchorImageId: (id: string | null) => void;
+  // Bulk-load every compose-related field from a FeedPost so the user can
+  // edit + re-generate. Avoids the noise of calling 10 setters in sequence.
+  hydrateFromFeedPost: (input: HydrationInput) => void;
   clearSlots: () => void;
 }
 
@@ -86,5 +97,19 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setSeason: (season) => set({ season }),
   setTimeOfDay: (time) => set({ timeOfDay: time }),
   setAnchorImageId: (id) => set({ anchorImageId: id }),
+  hydrateFromFeedPost: ({ characterId, slots, scene, params }) =>
+    set({
+      activeCharacterId: characterId,
+      selectedReferenceIds: params.character_reference_ids ?? [],
+      slots: { ...emptySlots, ...slots },
+      scene,
+      view: params.view ?? "RANDOM",
+      captureStyle: params.capture_style ?? "AUTO",
+      weather: params.weather ?? "AUTO",
+      season: params.season ?? "AUTO",
+      timeOfDay: params.time_of_day ?? "AUTO",
+      anchorImageId: params.anchor_image_id ?? null,
+      quality: params.quality ?? "medium",
+    }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),
 }));

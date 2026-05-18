@@ -16,6 +16,9 @@ class FeedPostCreate(BaseModel):
     image_id: str
     slots: dict = {}
     scene: str = ""
+    # Snapshot of the rest of the compose state so the user can later
+    # reload the exact setup from the feed page.
+    compose_params: dict = {}
 
 
 class FeedPostUpdate(BaseModel):
@@ -33,6 +36,7 @@ def _post_to_dict(p: FeedPost) -> dict:
         "image_id": p.image_id,
         "slots": p.slots,
         "scene": p.scene,
+        "compose_params": p.compose_params or {},
         "caption": p.caption,
         "hashtags": p.hashtags or [],
         "posted_at": p.posted_at.isoformat() if p.posted_at else None,
@@ -64,6 +68,7 @@ def create_post(req: FeedPostCreate, session: Session = Depends(get_session)):
         image_id=req.image_id,
         slots=req.slots,
         scene=req.scene,
+        compose_params=req.compose_params or {},
     )
     session.add(post)
     session.commit()
