@@ -52,12 +52,32 @@ class StorageService:
         self.base_dir = base_dir or settings.storage_path
         self.use_s3 = settings.s3_enabled
         self.bucket = settings.s3_bucket_name
+        # Namespace everything under a single root folder in the bucket so
+        # the bucket can host other data without collision. Strip any
+        # leading/trailing slashes for safety.
+        self.key_prefix = settings.s3_key_prefix.strip("/")
         self._s3 = None
         if self.use_s3:
             self._s3 = self._make_s3_client()
-            logger.info("StorageService using S3 bucket %r", self.bucket)
+            logger.info(
+                "StorageService using S3 bucket %r prefix %r",
+                self.bucket,
+                self.key_prefix or "(root)",
+            )
         else:
             logger.info("StorageService using local disk %s", self.base_dir)
+
+    def _build_key(self, *parts: str) -> str:
+        """Compose an S3 key under the configured root prefix."""
+        cleaned = [p.strip("/") for p in parts if p]
+        if self.key_prefix:
+            cleaned = [self.key_prefix, *cleaned]
+        return "/".join(cleaned)
+
+    @property
+    def _images_prefix(self) -> str:
+        """The list-prefix for the `images/` namespace (with trailing slash)."""
+        return self._build_key("images") + "/"
 
     # ------------------------------------------------------------------ S3
 
@@ -125,7 +145,7 @@ class StorageService:
         width, height = img.size
 
         if self.use_s3:
-            key = f"images/{filename}"
+            key = self._build_key("images", filename)
             self._s3_put(key, file_bytes, mime_type)
             storage_path = key
         else:
@@ -298,7 +318,7 @@ class StorageService:
         removed = 0
         paginator = self._s3.get_paginator("list_objects_v2")
         try:
-            for page in paginator.paginate(Bucket=self.bucket, Prefix="images/"):
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=self._images_prefix):
                 for obj in page.get("Contents", []) or []:
                     key = obj["Key"]
                     if key in known_keys:
