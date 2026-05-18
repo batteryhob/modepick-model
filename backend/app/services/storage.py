@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # is mid-flight when startup sweeps run.
 ORPHAN_GRACE_SECONDS = 300
 
-
 MIME_TO_EXT = {
     "image/png": ".png",
     "image/jpeg": ".jpg",
@@ -35,8 +34,75 @@ MIME_TO_EXT = {
 
 
 class StorageService:
+    """Two backends, one interface.
+
+    When `settings.s3_enabled` is True, all reads/writes/deletes/listing go
+    through an S3-compatible bucket (AWS S3, Lightsail Object Storage, or
+    any other S3-compatible service). `storage_path` on each ImageAsset row
+    stores the S3 object key.
+
+    Otherwise the local-disk backend is used: files live under
+    `settings.storage_dir` and `storage_path` is just the relative filename.
+
+    The switch is global per-process and decided at boot. Mixing modes is
+    not supported in a single run — migrate first (or wipe and restart).
+    """
+
     def __init__(self, base_dir: Path | None = None):
         self.base_dir = base_dir or settings.storage_path
+        self.use_s3 = settings.s3_enabled
+        self.bucket = settings.s3_bucket_name
+        self._s3 = None
+        if self.use_s3:
+            self._s3 = self._make_s3_client()
+            logger.info("StorageService using S3 bucket %r", self.bucket)
+        else:
+            logger.info("StorageService using local disk %s", self.base_dir)
+
+    # ------------------------------------------------------------------ S3
+
+    def _make_s3_client(self):
+        import boto3
+
+        kwargs: dict = {
+            "aws_access_key_id": settings.s3_access_key,
+            "aws_secret_access_key": settings.s3_secret_key,
+            "region_name": settings.s3_bucket_region,
+        }
+        if settings.s3_endpoint_url:
+            kwargs["endpoint_url"] = settings.s3_endpoint_url
+        return boto3.client("s3", **kwargs)
+
+    def _s3_put(self, key: str, body: bytes, content_type: str) -> None:
+        assert self._s3 is not None
+        self._s3.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+        )
+
+    def _s3_get_bytes(self, key: str) -> bytes:
+        assert self._s3 is not None
+        resp = self._s3.get_object(Bucket=self.bucket, Key=key)
+        return resp["Body"].read()
+
+    def _s3_delete(self, key: str) -> None:
+        assert self._s3 is not None
+        try:
+            self._s3.delete_object(Bucket=self.bucket, Key=key)
+        except Exception:
+            logger.warning("Failed to delete S3 object %s", key, exc_info=True)
+
+    def _s3_presigned_url(self, key: str) -> str:
+        assert self._s3 is not None
+        return self._s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=settings.s3_presigned_expires_seconds,
+        )
+
+    # -------------------------------------------------------------- writes
 
     def save_image(
         self,
@@ -45,31 +111,31 @@ class StorageService:
         source: str,
         session: Session | None = None,
     ) -> ImageAsset:
-        """Save image to disk and DB.
+        """Persist image bytes and create the matching ImageAsset row.
 
-        If `session` is provided, the new ImageAsset row is added to it and
-        flushed (but not committed) — the caller owns the transaction. Use this
-        when the surrounding request also writes related rows (e.g. wardrobe
-        item images) so everything happens in one transaction and SQLite
-        doesn't deadlock against itself.
-
-        If `session` is None, a short-lived session is opened and committed
-        immediately — useful for background tasks like image generation that
-        don't have an enclosing request session.
+        If `session` is given, the row is added + flushed (but not committed)
+        on that session — caller owns the transaction. Otherwise a short-
+        lived session is opened and committed immediately.
         """
         ext = MIME_TO_EXT.get(mime_type, ".png")
         file_id = str(uuid4())
         filename = f"{file_id}{ext}"
-        file_path = self.base_dir / filename
-
-        file_path.write_bytes(file_bytes)
 
         img = Image.open(io.BytesIO(file_bytes))
         width, height = img.size
 
+        if self.use_s3:
+            key = f"images/{filename}"
+            self._s3_put(key, file_bytes, mime_type)
+            storage_path = key
+        else:
+            file_path = self.base_dir / filename
+            file_path.write_bytes(file_bytes)
+            storage_path = filename
+
         asset = ImageAsset(
             id=file_id,
-            storage_path=filename,
+            storage_path=storage_path,
             width=width,
             height=height,
             mime_type=mime_type,
@@ -89,19 +155,38 @@ class StorageService:
 
         return asset
 
+    # --------------------------------------------------------------- reads
+
     def load_image_bytes(self, image_id: str) -> bytes:
         with Session(engine) as session:
             asset = session.get(ImageAsset, image_id)
             if not asset:
                 raise FileNotFoundError(f"ImageAsset {image_id} not found")
+            if self.use_s3:
+                return self._s3_get_bytes(asset.storage_path)
             return self._resolve_storage_path(asset.storage_path).read_bytes()
 
-    def get_image_path(self, image_id: str) -> Path:
+    def get_image_path(self, image_id: str) -> Path | None:
+        """Local-mode only: return the on-disk path. Returns None in S3 mode
+        (callers should fall back to `get_image_presigned_url` instead)."""
+        if self.use_s3:
+            return None
         with Session(engine) as session:
             asset = session.get(ImageAsset, image_id)
             if not asset:
                 raise FileNotFoundError(f"ImageAsset {image_id} not found")
             return self._resolve_storage_path(asset.storage_path)
+
+    def get_image_presigned_url(self, image_id: str) -> str | None:
+        """S3-mode only: short-lived URL the browser can fetch directly.
+        Returns None in local mode."""
+        if not self.use_s3:
+            return None
+        with Session(engine) as session:
+            asset = session.get(ImageAsset, image_id)
+            if not asset:
+                raise FileNotFoundError(f"ImageAsset {image_id} not found")
+            return self._s3_presigned_url(asset.storage_path)
 
     def get_mime_type(self, image_id: str) -> str:
         with Session(engine) as session:
@@ -110,18 +195,24 @@ class StorageService:
                 raise FileNotFoundError(f"ImageAsset {image_id} not found")
             return asset.mime_type
 
+    # ------------------------------------------------------------- deletes
+
     def delete_file(self, image_id: str) -> None:
-        """Delete only the file from disk."""
+        """Delete only the underlying object (S3 or disk). DB row untouched."""
         with Session(engine) as session:
             asset = session.get(ImageAsset, image_id)
             if not asset:
                 return
-            path = self._resolve_storage_path(asset.storage_path)
-            if path.exists():
-                path.unlink()
+            if self.use_s3:
+                self._s3_delete(asset.storage_path)
+            else:
+                path = self._resolve_storage_path(asset.storage_path)
+                if path.exists():
+                    path.unlink()
 
     def delete_asset_if_unreferenced(self, session: Session, image_id: str) -> None:
-        """Delete an ImageAsset row and file only when no model references it."""
+        """Delete an ImageAsset row + its backing object only when no model
+        references it. Safe to call after removing any single reference."""
         asset = session.get(ImageAsset, image_id)
         if not asset:
             return
@@ -140,32 +231,47 @@ class StorageService:
         if reference_exists:
             return
 
-        path = self._resolve_storage_path(asset.storage_path)
+        storage_path = asset.storage_path
         session.delete(asset)
         session.flush()
-        try:
-            if path.exists():
-                path.unlink()
-        except Exception:
-            pass
+        if self.use_s3:
+            self._s3_delete(storage_path)
+        else:
+            try:
+                path = self._resolve_storage_path(storage_path)
+                if path.exists():
+                    path.unlink()
+            except Exception:
+                logger.warning("Failed to remove local file %s", storage_path, exc_info=True)
+
+    # ----------------------------------------------------------- internals
 
     def _resolve_storage_path(self, storage_path: str) -> Path:
         path = Path(storage_path)
         return path if path.is_absolute() else self.base_dir / path
 
-    def cleanup_orphan_files(self) -> int:
-        """Remove disk files that no ImageAsset row points to.
+    # ------------------------------------------------------------- orphans
 
-        Skips files modified within ORPHAN_GRACE_SECONDS so an in-flight upload
-        that hasn't yet committed its DB row isn't yanked out from under it.
-        Returns the count of files removed.
+    def cleanup_orphan_files(self) -> int:
+        """Remove objects that no ImageAsset row points to.
+
+        Local mode: skips files modified within ORPHAN_GRACE_SECONDS so an
+        in-flight upload that hasn't committed yet isn't yanked.
+
+        S3 mode: same idea using S3 LastModified. Returns the count
+        removed. Safe to call repeatedly.
         """
         with Session(engine) as session:
-            known_basenames = {
-                Path(a.storage_path).name
+            known = {
+                Path(a.storage_path).name if not self.use_s3 else a.storage_path
                 for a in session.exec(select(ImageAsset)).all()
             }
 
+        if self.use_s3:
+            return self._cleanup_orphans_s3(known)
+        return self._cleanup_orphans_local(known)
+
+    def _cleanup_orphans_local(self, known_basenames: set[str]) -> int:
         now = time.time()
         removed = 0
         for path in self.base_dir.iterdir():
@@ -181,7 +287,31 @@ class StorageService:
             except Exception:
                 logger.warning("Failed to remove orphan file %s", path, exc_info=True)
         if removed:
-            logger.info("Removed %s orphan image file(s)", removed)
+            logger.info("Removed %s orphan local file(s)", removed)
+        return removed
+
+    def _cleanup_orphans_s3(self, known_keys: set[str]) -> int:
+        assert self._s3 is not None
+        import datetime as _dt
+
+        cutoff = _dt.datetime.now(_dt.UTC) - _dt.timedelta(seconds=ORPHAN_GRACE_SECONDS)
+        removed = 0
+        paginator = self._s3.get_paginator("list_objects_v2")
+        try:
+            for page in paginator.paginate(Bucket=self.bucket, Prefix="images/"):
+                for obj in page.get("Contents", []) or []:
+                    key = obj["Key"]
+                    if key in known_keys:
+                        continue
+                    last_modified = obj.get("LastModified")
+                    if last_modified and last_modified > cutoff:
+                        continue
+                    self._s3.delete_object(Bucket=self.bucket, Key=key)
+                    removed += 1
+        except Exception:
+            logger.warning("S3 orphan cleanup failed", exc_info=True)
+        if removed:
+            logger.info("Removed %s orphan S3 object(s)", removed)
         return removed
 
 

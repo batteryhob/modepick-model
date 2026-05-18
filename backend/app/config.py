@@ -6,9 +6,25 @@ class Settings(BaseSettings):
     # API Keys
     openai_api_key: str = ""
     gemini_api_key: str = ""
-    # Storage
+    # Local storage (used as fallback when S3 isn't configured)
     storage_dir: str = "./storage/images"
     database_url: str = "sqlite:///./data/app.db"
+
+    # S3-compatible object storage. When all four of bucket/region/access/
+    # secret are set, the StorageService switches to S3 mode: uploads go
+    # to the bucket and image URLs are presigned. Leave empty to keep
+    # using the local disk.
+    s3_bucket_name: str = ""
+    s3_bucket_region: str = "ap-northeast-2"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    # Optional explicit endpoint URL — only needed for non-AWS
+    # S3-compatible services (DigitalOcean Spaces, MinIO, R2, Wasabi).
+    # Leave empty for AWS S3 / Lightsail Object Storage.
+    s3_endpoint_url: str = ""
+    # Presigned URL TTL — long enough for a browser tab session, short
+    # enough that leaked URLs don't stay valid forever.
+    s3_presigned_expires_seconds: int = 3600
 
     # Server
     host: str = "0.0.0.0"
@@ -34,6 +50,12 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",")]
+
+    @property
+    def s3_enabled(self) -> bool:
+        return bool(
+            self.s3_bucket_name and self.s3_access_key and self.s3_secret_key
+        )
 
 
 settings = Settings()
