@@ -84,19 +84,70 @@ def _resolve_view(view: str | None) -> str:
     return DEFAULT_VIEW
 
 
-# Photo-realism directives baked into every compose call.
-# Each line targets one of the well-known "AI tells" — overly perfect skin,
-# studio-flat lighting, oversaturated color grading, symmetric poses. The
-# camera-signature line cues the model into "real DSLR photo" mode; the
-# Kodak Portra / film-grain hint pulls color toward natural tones; the skin
-# texture line is the single biggest anti-AI lever.
-PHOTOREALISM_DIRECTIVES = [
-    "Shot on a 35mm full-frame camera, 50mm lens at f/2.8 — natural shallow depth of field with soft background separation.",
-    "Soft natural lighting (window light or overcast daylight), gentle directional shadows, no harsh studio fill.",
-    "Natural skin texture with visible pores and subtle imperfections — no beauty retouching, no plastic skin, no airbrushed look.",
-    "Candid editorial framing, relaxed pose with slight body asymmetry, unforced expression.",
-    "Subtle 35mm film grain, Kodak Portra-style color palette — muted natural tones, not oversaturated, no CGI look.",
-]
+# Capture style — independent of view/framing. Tells the model WHO is
+# holding the camera and what (if any) device is visible in the shot.
+# Combined freely with any view: e.g. MIRROR_SELFIE + FULL_BODY = the
+# classic Instagram OOTD mirror shot showing the whole outfit.
+CAPTURE_STYLE_PROMPTS: dict[str, str] = {
+    "SELFIE": (
+        "Self-portrait selfie — the subject is taking the photo themselves "
+        "with a smartphone front camera at arm's length. Subject's arm or "
+        "hand holding the phone may be partly visible in frame. Intimate, "
+        "everyday phone-photo feel."
+    ),
+    "MIRROR_SELFIE": (
+        "Mirror selfie — the subject is photographing themselves in a mirror "
+        "while holding up a smartphone, which IS visible in the mirror "
+        "reflection in their hand. Casual setting (bedroom, hallway, fitting "
+        "room). Outfit clearly visible in the mirror. Subject's actual face "
+        "may be partly obscured by the phone, or visible above/beside it."
+    ),
+    "BY_OTHER": (
+        "Photo taken by another person — not a selfie. No phone visible in "
+        "the frame. Candid third-person perspective, subject being observed "
+        "naturally."
+    ),
+}
+DEFAULT_CAPTURE_STYLE = "AUTO"  # no specific directive — let view + scene decide
+
+
+def _resolve_capture_style(style: str | None) -> str:
+    if style and style in CAPTURE_STYLE_PROMPTS:
+        return style
+    return DEFAULT_CAPTURE_STYLE
+
+
+def _camera_signature(capture_style: str) -> str:
+    """The opening photo-realism directive shifts depending on capture style.
+    Phone-camera language for selfies/mirror; DSLR language otherwise."""
+    if capture_style == "SELFIE":
+        return (
+            "Captured with a smartphone front camera (selfie lens) — "
+            "wide-angle, all-in-focus, slight characteristic phone-camera "
+            "perspective distortion at close range."
+        )
+    if capture_style == "MIRROR_SELFIE":
+        return (
+            "Captured with a smartphone rear camera held by the subject, "
+            "photographing the mirror reflection — wide-angle phone lens, "
+            "all-in-focus, real phone-photo look."
+        )
+    return (
+        "Shot on a 35mm full-frame camera, 50mm lens at f/2.8 — natural "
+        "shallow depth of field with soft background separation."
+    )
+
+
+def _photorealism_directives(capture_style: str) -> list[str]:
+    """Anti-AI directives. Camera signature line swaps for selfie modes;
+    the rest stay constant (skin / lighting / grain / candid)."""
+    return [
+        _camera_signature(capture_style),
+        "Soft natural lighting (window light or overcast daylight), gentle directional shadows, no harsh studio fill.",
+        "Natural skin texture with visible pores and subtle imperfections — no beauty retouching, no plastic skin, no airbrushed look.",
+        "Candid framing, relaxed pose with slight body asymmetry, unforced expression.",
+        "Subtle film grain, Kodak Portra-style color palette — muted natural tones, not oversaturated, no CGI look.",
+    ]
 
 
 def _build_compose_prompt(
@@ -109,6 +160,7 @@ def _build_compose_prompt(
     product_ref_positions: dict[str, list[int]],
     mood_ref_position: int | None,
     view: str,
+    capture_style: str,
 ) -> str:
     lines = []
 
@@ -160,10 +212,17 @@ def _build_compose_prompt(
         lines.append(scene)
 
     lines.append(VIEW_PROMPTS[view])
-    # Photo-realism directives — kept together as a single block for easier
-    # auditing / tweaking when AI tells start creeping back into outputs.
-    lines.extend(PHOTOREALISM_DIRECTIVES)
-    lines.append("4:5 aspect ratio, photorealistic, indistinguishable from a real DSLR photograph.")
+    if capture_style in CAPTURE_STYLE_PROMPTS:
+        lines.append(CAPTURE_STYLE_PROMPTS[capture_style])
+    # Photo-realism directives — camera signature line varies with capture
+    # style (phone for selfies, DSLR otherwise); rest stay constant.
+    lines.extend(_photorealism_directives(capture_style))
+    final_look = (
+        "indistinguishable from a real phone photo"
+        if capture_style in ("SELFIE", "MIRROR_SELFIE")
+        else "indistinguishable from a real DSLR photograph"
+    )
+    lines.append(f"4:5 aspect ratio, photorealistic, {final_look}.")
 
     return "\n".join(lines)
 
@@ -177,8 +236,10 @@ def _prepare_compose_inputs(
     quality: str,
     character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
+    capture_style: str = DEFAULT_CAPTURE_STYLE,
 ) -> dict:
     view = _resolve_view(view)
+    capture_style = _resolve_capture_style(capture_style)
     # 1. Load character + references
     character = session.get(Character, character_id)
     if not character:
@@ -278,6 +339,7 @@ def _prepare_compose_inputs(
         product_ref_positions,
         mood_ref_position,
         view,
+        capture_style,
     )
 
     return {
@@ -285,6 +347,7 @@ def _prepare_compose_inputs(
         "references": references,
         "selected_char_refs": selected_char_refs,
         "view": view,
+        "capture_style": capture_style,
     }
 
 
@@ -296,6 +359,7 @@ def enqueue_compose_look(
     quality: str,
     character_reference_ids: list[str] | None = None,
     view: str = DEFAULT_VIEW,
+    capture_style: str = DEFAULT_CAPTURE_STYLE,
 ) -> str:
     with Session(engine) as session:
         prepared = _prepare_compose_inputs(
@@ -307,11 +371,13 @@ def enqueue_compose_look(
             quality,
             character_reference_ids,
             view,
+            capture_style,
         )
         references = prepared["references"]
         prompt = prepared["prompt"]
         selected_char_refs = prepared["selected_char_refs"]
         resolved_view = prepared["view"]
+        resolved_capture_style = prepared["capture_style"]
 
         job = GenerationJob(
             type="compose_look",
@@ -327,6 +393,7 @@ def enqueue_compose_look(
                 "scene": scene,
                 "quality": quality,
                 "view": resolved_view,
+                "capture_style": resolved_capture_style,
             },
             provider=provider_name,
             model=f"{provider_name}-image",

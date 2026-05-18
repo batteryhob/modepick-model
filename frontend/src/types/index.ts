@@ -138,6 +138,8 @@ export type ComposeView =
   | "HIGH_ANGLE"
   | "LOW_ANGLE";
 
+export type CaptureStyle = "AUTO" | "SELFIE" | "MIRROR_SELFIE" | "BY_OTHER";
+
 export interface ComposeRequest {
   character_id: string;
   slots: ComposerSlots;
@@ -146,6 +148,7 @@ export interface ComposeRequest {
   quality: "low" | "medium" | "high";
   character_reference_ids: string[];
   view: ComposeView;
+  capture_style: CaptureStyle;
 }
 
 export interface ComposeResponse {

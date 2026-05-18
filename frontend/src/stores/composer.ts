@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ComposerSlots, ComposeView } from "@/types";
+import type { CaptureStyle, ComposerSlots, ComposeView } from "@/types";
 
 interface ComposerState {
   activeCharacterId: string | null;
@@ -9,6 +9,7 @@ interface ComposerState {
   provider: "openai" | "gemini";
   quality: "low" | "medium" | "high";
   view: ComposeView;
+  captureStyle: CaptureStyle;
 
   setActiveCharacter: (id: string | null, referenceIds?: string[]) => void;
   setSelectedReferenceIds: (ids: string[]) => void;
@@ -17,6 +18,7 @@ interface ComposerState {
   setProvider: (provider: "openai" | "gemini") => void;
   setQuality: (quality: "low" | "medium" | "high") => void;
   setView: (view: ComposeView) => void;
+  setCaptureStyle: (style: CaptureStyle) => void;
   clearSlots: () => void;
 }
 
@@ -38,6 +40,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   provider: "openai",
   quality: "medium",
   view: "RANDOM",
+  captureStyle: "AUTO",
 
   setActiveCharacter: (id, referenceIds) =>
     set({
@@ -53,5 +56,6 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setProvider: (provider) => set({ provider }),
   setQuality: (quality) => set({ quality }),
   setView: (view) => set({ view }),
+  setCaptureStyle: (style) => set({ captureStyle: style }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),
 }));

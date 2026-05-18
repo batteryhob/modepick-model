@@ -9,6 +9,7 @@ import type {
   MoodReference,
   ComposerSlots,
   ComposeView,
+  CaptureStyle,
 } from "@/types";
 import IconButton from "@/components/IconButton";
 import LibraryPicker from "@/components/LibraryPicker";
@@ -34,6 +35,13 @@ const VIEW_OPTIONS: { value: ComposeView; label: string }[] = [
   { value: "LOW_ANGLE", label: "로우앵글 (Low Angle)" },
 ];
 
+const CAPTURE_STYLE_OPTIONS: { value: CaptureStyle; label: string }[] = [
+  { value: "AUTO", label: "자동 (기본)" },
+  { value: "SELFIE", label: "셀피 (앞 카메라)" },
+  { value: "MIRROR_SELFIE", label: "거울 셀피 (OOTD)" },
+  { value: "BY_OTHER", label: "남이 찍어준 사진" },
+];
+
 // Rough mean per-image generation time at quality=medium with several refs,
 // based on observed jobs. Used to display an ETA during compose so the user
 // has a sense of "how long left" instead of a bare spinner.
@@ -57,6 +65,8 @@ export default function ComposerPage() {
     setQuality,
     view,
     setView,
+    captureStyle,
+    setCaptureStyle,
   } = useComposerStore();
 
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
@@ -216,6 +226,7 @@ export default function ComposerPage() {
       quality,
       character_reference_ids: selectedReferenceIds,
       view,
+      capture_style: captureStyle,
     });
   };
 
@@ -409,6 +420,22 @@ export default function ComposerPage() {
             {VIEW_OPTIONS.map((v) => (
               <option key={v.value} value={v.value}>
                 {v.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Capture style — who took the photo */}
+        <div className="border rounded-lg p-3 bg-white">
+          <p className="text-xs font-mono text-gray-400 mb-1">캡처 스타일</p>
+          <select
+            value={captureStyle}
+            onChange={(e) => setCaptureStyle(e.target.value as CaptureStyle)}
+            className="w-full text-sm border-0 p-0 focus:ring-0 focus:outline-none bg-transparent"
+          >
+            {CAPTURE_STYLE_OPTIONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
               </option>
             ))}
           </select>

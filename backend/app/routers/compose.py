@@ -14,6 +14,7 @@ class ComposeRequest(BaseModel):
     quality: str = "medium"
     character_reference_ids: list[str] = []
     view: str = "RANDOM"
+    capture_style: str = "AUTO"
 
 
 @router.post("/compose", status_code=202)
@@ -27,6 +28,7 @@ def compose(req: ComposeRequest, background_tasks: BackgroundTasks):
             quality=req.quality,
             character_reference_ids=req.character_reference_ids,
             view=req.view,
+            capture_style=req.capture_style,
         )
         background_tasks.add_task(run_compose_job, job_id)
 
