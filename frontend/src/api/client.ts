@@ -16,6 +16,15 @@ export function imageUrl(id: string): string {
   return `${API_BASE}/api/images/${id}`;
 }
 
+// Goes through a backend endpoint that forces Content-Disposition: attachment.
+// The HTML `download` attribute on a plain <a> is silently ignored when the
+// href is cross-origin (our S3 public URLs), so the file would open as a
+// preview instead of downloading.
+export function imageDownloadUrl(id: string, filename: string): string {
+  const params = new URLSearchParams({ filename });
+  return `${API_BASE}/api/images/${id}/download?${params}`;
+}
+
 export const api = {
   health: () => request<{ status: string; db: string; storage: string }>("/api/health"),
 
@@ -143,6 +152,55 @@ export const api = {
     get: (id: string) => request<GenerationJob>(`/api/jobs/${id}`),
     stats: () => request<JobStats>("/api/jobs/stats"),
   },
+
+  instagram: {
+    // Returns the authorize URL the browser should redirect to + a
+    // CSRF state token the callback page should verify.
+    startAuth: () => request<InstagramAuthStart>("/api/auth/instagram/start"),
+    // Called by the callback page after Instagram redirects back with a
+    // ?code= param. Backend exchanges the code for a long-lived token
+    // and upserts an InstagramAccount row.
+    completeAuth: (code: string) =>
+      request<InstagramAccount>(
+        `/api/auth/instagram/callback?code=${encodeURIComponent(code)}`,
+      ),
+    accounts: () => request<InstagramAccount[]>("/api/instagram/accounts"),
+    deleteAccount: (id: string) =>
+      request<void>(`/api/instagram/accounts/${id}`, { method: "DELETE" }),
+    updateLabel: (id: string, label: string | null) =>
+      request<InstagramAccount>(`/api/instagram/accounts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      }),
+    publish: (
+      feedPostId: string,
+      payload: {
+        account_id: string;
+        caption?: string | null;
+        hashtags?: string[];
+      },
+    ) =>
+      request<InstagramPublishResult>(`/api/instagram/publish/${feedPostId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
+    publishCarousel: (payload: {
+      feed_post_ids: string[];
+      account_id: string;
+      caption?: string | null;
+      hashtags?: string[];
+    }) =>
+      request<InstagramPublishResult & { count: number }>(
+        "/api/instagram/publish-carousel",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      ),
+  },
 };
 
 // Re-export types for convenience
@@ -158,5 +216,8 @@ import type {
   ComposeResponse,
   CharacterCreateResponse,
   CharacterCreateRequest,
+  InstagramAccount,
+  InstagramAuthStart,
+  InstagramPublishResult,
   JobStats,
 } from "@/types";

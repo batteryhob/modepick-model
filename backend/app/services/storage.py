@@ -228,6 +228,29 @@ class StorageService:
                 return self._s3_public_url(asset.storage_path)
             return self._s3_presigned_url(asset.storage_path)
 
+    def get_image_download_url(self, image_id: str, filename: str) -> str | None:
+        """S3-mode only: presigned URL with Content-Disposition: attachment
+        so the browser saves the file instead of previewing it. Public-URL
+        objects can't override Content-Disposition, so this always builds a
+        presigned URL even when public-read is enabled. Returns None in
+        local mode."""
+        if not self.use_s3:
+            return None
+        assert self._s3 is not None
+        with Session(engine) as session:
+            asset = session.get(ImageAsset, image_id)
+            if not asset:
+                raise FileNotFoundError(f"ImageAsset {image_id} not found")
+            return self._s3.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": self.bucket,
+                    "Key": asset.storage_path,
+                    "ResponseContentDisposition": f'attachment; filename="{filename}"',
+                },
+                ExpiresIn=settings.s3_presigned_expires_seconds,
+            )
+
     def get_mime_type(self, image_id: str) -> str:
         with Session(engine) as session:
             asset = session.get(ImageAsset, image_id)

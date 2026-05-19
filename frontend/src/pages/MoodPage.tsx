@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { api, imageUrl } from "@/api/client";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import PageHeader from "@/components/PageHeader";
 import type { MoodReference } from "@/types";
 
@@ -11,6 +12,7 @@ export default function MoodPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState("");
   const [uploadTags, setUploadTags] = useState("");
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
   const { data: moods = [], isLoading } = useQuery({
     queryKey: ["mood"],
@@ -95,7 +97,10 @@ export default function MoodPage() {
               <img
                 src={imageUrl(mood.image_id)}
                 alt={mood.name}
-                className="w-full h-full object-cover"
+                onClick={() =>
+                  setLightbox({ src: imageUrl(mood.image_id), alt: mood.name })
+                }
+                className="w-full h-full object-cover cursor-zoom-in"
               />
               <button
                 onClick={() => {
@@ -194,6 +199,14 @@ export default function MoodPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {lightbox && (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          onClose={() => setLightbox(null)}
+        />
       )}
     </div>
   );

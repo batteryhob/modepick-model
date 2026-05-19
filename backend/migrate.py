@@ -69,6 +69,16 @@ def main() -> None:
                     "ALTER TABLE feed_post ADD COLUMN compose_params TEXT DEFAULT '{}'"
                 )
                 print("[4d] Added feed_post.compose_params")
+            if "ig_media_id" not in feed_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE feed_post ADD COLUMN ig_media_id TEXT"
+                )
+                print("[5a] Added feed_post.ig_media_id")
+            if "ig_account_id" not in feed_cols:
+                conn.exec_driver_sql(
+                    "ALTER TABLE feed_post ADD COLUMN ig_account_id TEXT"
+                )
+                print("[5b] Added feed_post.ig_account_id")
 
     # Always run create_all to add any new tables.
     create_db_and_tables()

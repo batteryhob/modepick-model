@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { api, imageUrl } from "@/api/client";
 import IconButton from "@/components/IconButton";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
 import type { WorldLocation, WorldLocationImage } from "@/types";
@@ -230,6 +231,7 @@ function LocationDetailModal({
   isRemoving,
 }: DetailProps) {
   const atMax = loc.images.length >= MAX_IMAGES_PER_LOCATION;
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
   return (
     <div
@@ -275,7 +277,13 @@ function LocationDetailModal({
                   <img
                     src={imageUrl(img.image_id)}
                     alt={`${loc.name} ${idx + 1}`}
-                    className="w-full h-full object-cover"
+                    onClick={() =>
+                      setLightbox({
+                        src: imageUrl(img.image_id),
+                        alt: `${loc.name} ${idx + 1}`,
+                      })
+                    }
+                    className="w-full h-full object-cover cursor-zoom-in"
                   />
                 </div>
                 <div className="p-1.5 text-[10px] font-mono text-gray-400">
@@ -322,6 +330,14 @@ function LocationDetailModal({
           </p>
         </div>
       </div>
+
+      {lightbox && (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

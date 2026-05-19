@@ -38,7 +38,12 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "https://localhost:5173,https://127.0.0.1:5173,"
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "https://localhost:4173,https://127.0.0.1:4173"
+    )
 
     # Defaults
     default_provider: str = "openai"
@@ -47,6 +52,17 @@ class Settings(BaseSettings):
     # Cost limits
     max_cost_per_day_usd: float = 20.0
     max_references_per_call: int = 12
+
+    # Instagram API (Meta Developer App). Used for the OAuth flow that
+    # connects a user's IG Business/Creator account and for publishing
+    # posts on their behalf. Set both in .env when ready to use the
+    # publish feature — the auth router refuses to start the flow
+    # without them.
+    instagram_app_id: str = ""
+    instagram_app_secret: str = ""
+    # Must EXACTLY match the OAuth Redirect URI registered in the Meta
+    # Developer Console. localhost is allowed only over HTTPS.
+    instagram_redirect_uri: str = "https://localhost:5173/auth/instagram/callback"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
@@ -65,6 +81,10 @@ class Settings(BaseSettings):
         return bool(
             self.s3_bucket_name and self.s3_access_key and self.s3_secret_key
         )
+
+    @property
+    def instagram_configured(self) -> bool:
+        return bool(self.instagram_app_id and self.instagram_app_secret)
 
 
 settings = Settings()

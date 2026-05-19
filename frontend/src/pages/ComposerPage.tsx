@@ -105,11 +105,18 @@ export default function ComposerPage() {
     setSeason,
     timeOfDay,
     setTimeOfDay,
+    count,
+    setCount,
     anchorImageId,
     setAnchorImageId,
   } = useComposerStore();
 
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
+  // resultImageIds holds every image returned by the last successful job.
+  // resultImageId is the one currently shown in the big preview and used
+  // by anchor / save-to-feed. With count=1 they're identical; with count>1
+  // the user clicks a thumbnail to switch the selection.
+  const [resultImageIds, setResultImageIds] = useState<string[]>([]);
   const [resultImageId, setResultImageId] = useState<string | null>(null);
   const [resultCost, setResultCost] = useState<number>(0);
   const [resultJobId, setResultJobId] = useState<string | null>(null);
@@ -185,7 +192,9 @@ export default function ComposerPage() {
     if (!composeJob) return;
 
     if (composeJob.status === "success") {
-      setResultImageId(composeJob.output_image_ids[0] || null);
+      const ids = composeJob.output_image_ids || [];
+      setResultImageIds(ids);
+      setResultImageId(ids[0] || null);
       setResultCost(composeJob.cost_estimate_usd || 0);
       setComposeJobId(null);
       setComposeError(null);
@@ -268,6 +277,7 @@ export default function ComposerPage() {
     if (!canGenerate) return;
 
     setResultImageId(null);
+    setResultImageIds([]);
     setResultCost(0);
     setComposeError(null);
     composeMutation.mutate({
@@ -282,6 +292,7 @@ export default function ComposerPage() {
       weather,
       season,
       time_of_day: timeOfDay,
+      count,
       anchor_image_id: anchorImageId,
     });
   };
@@ -333,6 +344,7 @@ export default function ComposerPage() {
 
   const handleDiscard = () => {
     setResultImageId(null);
+    setResultImageIds([]);
     setResultCost(0);
     setResultJobId(null);
     setComposeJobId(null);
@@ -652,6 +664,17 @@ export default function ComposerPage() {
             <option value="medium">보통</option>
             <option value="high">높음</option>
           </select>
+          <select
+            value={count}
+            onChange={(e) => setCount(parseInt(e.target.value, 10))}
+            className="flex-1 text-xs border rounded-md px-2 py-1.5"
+            title="한 번에 N장 생성. 비용은 N배 들지만 골라쓰기 가능."
+          >
+            <option value="1">1장</option>
+            <option value="2">2장</option>
+            <option value="3">3장</option>
+            <option value="4">4장</option>
+          </select>
         </div>
 
         {/* Over-limit warning */}
@@ -747,6 +770,33 @@ export default function ComposerPage() {
             </div>
           )}
         </div>
+
+        {/* Variant gallery — only when the batch returned >1 image. */}
+        {resultImageIds.length > 1 && (
+          <div className="mt-3 flex gap-2 justify-center flex-wrap">
+            {resultImageIds.map((id) => {
+              const selected = id === resultImageId;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setResultImageId(id)}
+                  className={`relative w-16 h-20 rounded-md overflow-hidden border-2 transition-all ${
+                    selected
+                      ? "border-gray-900 ring-2 ring-gray-900/30"
+                      : "border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                  aria-label={selected ? "선택됨" : "이 변형 선택"}
+                >
+                  <img
+                    src={imageUrl(id)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Result Actions */}
         {resultImageId && (

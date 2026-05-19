@@ -177,4 +177,29 @@ class FeedPost(SQLModel, table=True):
     # When set, the user has marked this post as already published on
     # Instagram. Null = still a draft / unposted.
     posted_at: Optional[datetime] = None
+    # Set when the post is actually published via the Instagram Graph API.
+    # This is the IG media id Meta returns; lets us link back to the live
+    # post and avoid double-publishing.
+    ig_media_id: Optional[str] = None
+    ig_account_id: Optional[str] = Field(default=None, foreign_key="instagram_account.id")
     created_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class InstagramAccount(SQLModel, table=True):
+    """One row per connected IG Business/Creator account. The user can link
+    multiple accounts (multi-account workflow). access_token is the long-lived
+    token (60 days) — refresh it lazily before expiry."""
+
+    __tablename__ = "instagram_account"
+
+    id: str = Field(default_factory=gen_uuid, primary_key=True)
+    # The ID Meta assigns to the IG professional account. Used as the path
+    # parameter in publish API calls. Unique across the table.
+    ig_user_id: str = Field(unique=True, index=True)
+    username: str  # display only; mutable on IG side, so we re-fetch sometimes
+    access_token: str  # long-lived (60d)
+    token_expires_at: datetime
+    # Free-form note the user can attach ("메인 계정", "스토어용" 등).
+    label: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { api, imageUrl } from "@/api/client";
+import { api, imageDownloadUrl, imageUrl } from "@/api/client";
+import { PublishToInstagramModal } from "@/components/PublishToInstagramModal";
 import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
@@ -11,11 +12,17 @@ import type { FeedPost } from "@/types";
 export default function FeedPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Array (not Set) so we preserve the order the user clicked things in —
+  // that order becomes the carousel page order on Instagram.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // We track viewer state as IDs (not snapshotted post objects) so that
   // React Query refetches after PATCH/DELETE flow back into the carousel.
   const [viewerPostIds, setViewerPostIds] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  // The PublishToInstagramModal is opened from two places: (a) the viewer's
+  // single-post toolbar, (b) the header's "선택 발행" button when 2+ are
+  // selected. Holding the target ids here lets one modal component serve both.
+  const [publishTargetIds, setPublishTargetIds] = useState<string[] | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["feed", { limit: 27, offset: 0 }],
@@ -44,11 +51,7 @@ export default function FeedPage() {
     mutationFn: api.feed.delete,
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["feed"] });
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      setSelectedIds((prev) => prev.filter((x) => x !== id));
       setViewerPostIds((prev) => prev.filter((x) => x !== id));
       toast.success("삭제됨");
     },
@@ -56,12 +59,9 @@ export default function FeedPage() {
   });
 
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }, []);
 
   const openSingle = useCallback((post: FeedPost) => {
@@ -70,14 +70,17 @@ export default function FeedPage() {
   }, []);
 
   const openSelected = useCallback(() => {
-    if (selectedIds.size === 0) return;
-    const ordered = posts.filter((p) => selectedIds.has(p.id)).map((p) => p.id);
+    if (selectedIds.length === 0) return;
+    // Keep the click order intact, but drop any ids whose posts have been
+    // deleted in the background since selection.
+    const valid = new Set(posts.map((p) => p.id));
+    const ordered = selectedIds.filter((id) => valid.has(id));
     if (ordered.length === 0) return;
     setViewerPostIds(ordered);
     setViewerIndex(0);
   }, [posts, selectedIds]);
 
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const clearSelection = useCallback(() => setSelectedIds([]), []);
 
   return (
     <div>
@@ -85,10 +88,10 @@ export default function FeedPage() {
         title="피드"
         subtitle={`총 ${data?.total ?? 0}개 — 인스타그램에 올릴 게시물 모음`}
         action={
-          selectedIds.size > 0 ? (
-            <div className="flex items-center gap-2">
+          selectedIds.length > 0 ? (
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-gray-500 hidden sm:inline">
-                {selectedIds.size}개 선택
+                {selectedIds.length}개 선택
               </span>
               <button
                 onClick={clearSelection}
@@ -100,8 +103,13 @@ export default function FeedPage() {
                 onClick={openSelected}
                 className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800"
               >
-                선택 보기 ({selectedIds.size})
+                선택 보기 ({selectedIds.length})
               </button>
+              {selectedIds.length > 10 && (
+                <span className="text-[11px] text-amber-600">
+                  인스타 캐러셀은 최대 10장
+                </span>
+              )}
             </div>
           ) : null
         }
@@ -111,7 +119,8 @@ export default function FeedPage() {
 
       <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-[2px] sm:gap-1">
         {posts.map((post: FeedPost) => {
-          const selected = selectedIds.has(post.id);
+          const selectionOrder = selectedIds.indexOf(post.id); // -1 if not selected
+          const selected = selectionOrder !== -1;
           const isPosted = !!post.posted_at;
           return (
             <div
@@ -140,13 +149,18 @@ export default function FeedPage() {
                   toggleSelect(post.id);
                 }}
                 aria-label={selected ? "선택 해제" : "선택"}
-                className={`absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-xs transition-opacity ${
+                title={
+                  selected
+                    ? `${selectionOrder + 1}번째로 선택됨 — 캐러셀에서도 이 순서로 올라감`
+                    : "선택"
+                }
+                className={`absolute top-1.5 right-1.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono transition-opacity ${
                   selected
                     ? "bg-gray-900 text-white opacity-100"
                     : "bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 hover:bg-white"
                 }`}
               >
-                {selected ? "✓" : "+"}
+                {selected ? selectionOrder + 1 : "+"}
               </button>
             </div>
           );
@@ -170,7 +184,22 @@ export default function FeedPage() {
               deleteMutation.mutate(id);
             }
           }}
+          onRequestPublish={(ids) => setPublishTargetIds(ids)}
           isDeleting={deleteMutation.isPending}
+        />
+      )}
+
+      {publishTargetIds && (
+        <PublishToInstagramModal
+          feedPostIds={publishTargetIds}
+          imageIds={publishTargetIds
+            .map((id) => posts.find((p) => p.id === id)?.image_id)
+            .filter(Boolean) as string[]}
+          onClose={() => setPublishTargetIds(null)}
+          onPublished={() => {
+            setPublishTargetIds(null);
+            setSelectedIds([]);
+          }}
         />
       )}
     </div>
@@ -183,6 +212,7 @@ interface CarouselProps {
   setIndex: (i: number) => void;
   onClose: () => void;
   onDelete: (id: string) => void;
+  onRequestPublish: (ids: string[]) => void;
   isDeleting: boolean;
 }
 
@@ -192,6 +222,7 @@ function CarouselViewer({
   setIndex,
   onClose,
   onDelete,
+  onRequestPublish,
   isDeleting,
 }: CarouselProps) {
   const navigate = useNavigate();
@@ -300,10 +331,9 @@ function CarouselViewer({
             </IconButton>
           </div>
 
-          {/* Body: caption / hashtags / posted toggle + read-only meta */}
+          {/* Body: prompt + read-only meta. Caption/hashtags are entered
+              at publish time, not persisted on the post. */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <PostMetaEditor key={post.id} post={post} />
-
             {post.scene && (
               <div>
                 <p className="text-xs font-mono text-gray-400 mb-1">프롬프트</p>
@@ -338,7 +368,38 @@ function CarouselViewer({
             ) : (
               <span />
             )}
-            <div className="flex gap-2 flex-wrap justify-end">
+            <div className="flex gap-2 flex-wrap justify-end items-center">
+              {/* Publish history is informational only — re-publishing the same
+                  image is intentionally allowed (the user can run the same look
+                  through multiple accounts / repost campaigns / etc). */}
+              {post.ig_media_id && (
+                <span
+                  title={`마지막 IG media: ${post.ig_media_id}`}
+                  className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200"
+                >
+                  ✓ 발행 이력
+                </span>
+              )}
+              {posts.length > 10 ? (
+                <span className="px-3 py-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+                  캐러셀은 최대 10장
+                </span>
+              ) : posts.length > 1 ? (
+                <button
+                  onClick={() => onRequestPublish(posts.map((p) => p.id))}
+                  className="px-3 py-1.5 text-xs bg-pink-600 text-white rounded-md hover:bg-pink-700"
+                  title="이 N장을 한 캐러셀 게시물로 발행"
+                >
+                  이 {posts.length}장을 캐러셀로 발행
+                </button>
+              ) : (
+                <button
+                  onClick={() => onRequestPublish([post.id])}
+                  className="px-3 py-1.5 text-xs bg-pink-600 text-white rounded-md hover:bg-pink-700"
+                >
+                  {post.ig_media_id ? "다시 발행" : "IG에 발행"}
+                </button>
+              )}
               <button
                 onClick={handleRecompose}
                 title="이 게시물의 모든 설정을 합성 페이지로 불러옵니다"
@@ -347,8 +408,7 @@ function CarouselViewer({
                 이 설정으로 합성
               </button>
               <a
-                href={imageUrl(post.image_id)}
-                download={`feed_${post.id}.png`}
+                href={imageDownloadUrl(post.image_id, `feed_${post.id}.png`)}
                 className="px-3 py-1.5 text-xs border rounded-md hover:bg-gray-50"
               >
                 다운로드
@@ -368,134 +428,3 @@ function CarouselViewer({
   );
 }
 
-function PostMetaEditor({ post }: { post: FeedPost }) {
-  const queryClient = useQueryClient();
-  const toast = useToast();
-  const [caption, setCaption] = useState(post.caption ?? "");
-  const [hashtagsText, setHashtagsText] = useState(post.hashtags.join(", "));
-
-  const update = useMutation({
-    mutationFn: (data: Parameters<typeof api.feed.update>[1]) =>
-      api.feed.update(post.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["feed"] });
-    },
-  });
-
-  const dirty =
-    (caption ?? "").trim() !== (post.caption ?? "").trim() ||
-    parseHashtags(hashtagsText).join(",") !== post.hashtags.join(",");
-
-  const saveText = () => {
-    const cleaned = parseHashtags(hashtagsText);
-    update.mutate(
-      { caption: caption.trim() || null, hashtags: cleaned },
-      {
-        onSuccess: () => {
-          setHashtagsText(cleaned.join(", "));
-          toast.success("저장됨");
-        },
-        onError: (err: Error) => toast.error(`저장 실패: ${err.message}`),
-      },
-    );
-  };
-
-  const togglePosted = () => {
-    update.mutate(
-      { posted: !post.posted_at },
-      {
-        onSuccess: () => {
-          toast.success(post.posted_at ? "올림 표시 해제" : "올림으로 표시");
-        },
-        onError: (err: Error) => toast.error(`변경 실패: ${err.message}`),
-      },
-    );
-  };
-
-  const copyForInsta = async () => {
-    const tagLine = post.hashtags.map((h) => `#${h}`).join(" ");
-    const text = [caption?.trim(), tagLine].filter(Boolean).join("\n\n");
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success("클립보드에 복사됨");
-    } catch {
-      toast.error("복사 실패 — 수동으로 복사하세요");
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-mono text-gray-400">캡션</p>
-          <button
-            onClick={copyForInsta}
-            disabled={!caption?.trim() && post.hashtags.length === 0}
-            className="text-[11px] text-gray-500 hover:text-gray-900 disabled:opacity-30"
-          >
-            IG 복사
-          </button>
-        </div>
-        <textarea
-          value={caption}
-          onChange={(e) => setCaption(e.target.value)}
-          placeholder="인스타그램 캡션..."
-          rows={3}
-          className="w-full text-sm px-2 py-1.5 border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-        />
-      </div>
-
-      <div>
-        <p className="text-xs font-mono text-gray-400 mb-1">해시태그</p>
-        <input
-          type="text"
-          value={hashtagsText}
-          onChange={(e) => setHashtagsText(e.target.value)}
-          placeholder="ootd, fashion, seoul"
-          className="w-full text-sm px-2 py-1.5 border rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
-        />
-        {post.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {post.hashtags.map((tag) => (
-              <span
-                key={tag}
-                className="text-[11px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={togglePosted}
-          disabled={update.isPending}
-          className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
-            post.posted_at
-              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          {post.posted_at ? "✓ 올림" : "올림으로 표시"}
-        </button>
-        <button
-          onClick={saveText}
-          disabled={!dirty || update.isPending}
-          className="px-3 py-1.5 text-xs bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-30"
-        >
-          {update.isPending ? "저장 중..." : "저장"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function parseHashtags(input: string): string[] {
-  return input
-    .split(/[,\s\n]+/)
-    .map((t) => t.replace(/^#+/, "").trim())
-    .filter(Boolean);
-}

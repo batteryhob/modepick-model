@@ -12,6 +12,8 @@ from app.routers import (
     feed,
     health,
     images,
+    instagram,
+    instagram_auth,
     jobs,
     mood,
     wardrobe,
@@ -57,3 +59,5 @@ app.include_router(world.router)
 app.include_router(compose.router)
 app.include_router(feed.router)
 app.include_router(jobs.router)
+app.include_router(instagram_auth.router)
+app.include_router(instagram.router)

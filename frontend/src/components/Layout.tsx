@@ -7,6 +7,7 @@ const tabs = [
   { to: "/mood", label: "무드" },
   { to: "/world", label: "세계관" },
   { to: "/composer", label: "합성" },
+  { to: "/instagram", label: "IG" },
   { to: "/log", label: "로그" },
 ];
 

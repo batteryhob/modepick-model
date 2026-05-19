@@ -189,25 +189,45 @@ def _resolve_capture_style(style: str | None) -> str:
     return DEFAULT_CAPTURE_STYLE
 
 
+# EXIF-grade camera spec pools. External prompt-engineering guides
+# consistently show that concrete camera/lens/aperture/ISO numbers cue
+# the model toward "photograph" mode more reliably than generic words
+# like "photorealistic". Pools rotate per call so a feed series doesn't
+# look like every shot used the same body.
+EDITORIAL_CAMERA_POOL = [
+    "Shot on Sony A7 IV with 50mm f/1.8 prime, ISO 400, 1/200s — natural shallow depth of field, soft background separation.",
+    "Shot on Canon EOS R5 with 85mm f/1.8, ISO 320, 1/250s — portrait-tele compression, creamy background falloff.",
+    "Shot on Fujifilm X-T5 with 35mm f/2, ISO 500, 1/160s — documentary feel, environment readable in the background.",
+    "Shot on Nikon Z6 II with 50mm f/2.8, ISO 640, 1/200s — natural look without extreme blur, real-photo depth.",
+    "Shot on Leica Q2 fixed 28mm f/2.8, ISO 400, 1/200s — environmental portrait wide, sharp across the figure.",
+    "Shot on Canon RF 35mm f/1.8 on EOS R6, ISO 500, 1/160s — mild background blur, real reportage style.",
+]
+
+SELFIE_CAMERA_POOL = [
+    "Captured with iPhone 15 Pro front camera, 23mm-equiv f/1.9, auto ISO ~320, 1/120s — wide phone-selfie perspective, slight close-range distortion.",
+    "Captured with Samsung Galaxy S24 front camera, 26mm-equiv f/2.2, ISO 250, 1/100s — typical front-cam phone selfie.",
+    "Captured with iPhone 14 front camera, 24mm-equiv f/1.9, ISO 400 indoor — honest phone-selfie look, slight grain.",
+]
+
+MIRROR_SELFIE_CAMERA_POOL = [
+    "Captured with iPhone 15 Pro rear main camera, 26mm-equiv f/1.78, ISO 200, 1/120s — phone photographing the mirror reflection.",
+    "Captured with Samsung Galaxy S24 rear main lens, 24mm-equiv f/1.8, ISO 320, 1/100s — phone clearly held in the subject's hand in the mirror.",
+    "Captured with iPhone 13 rear camera through a bedroom mirror, ISO 250, 1/80s — slight handshake softness, honestly imperfect mirror selfie.",
+]
+
+
 def _camera_signature(capture_style: str) -> str:
-    """The opening photo-realism directive shifts depending on capture style.
-    Phone-camera language for selfies/mirror; DSLR language otherwise."""
+    """Sample a fresh EXIF-style camera spec for this compose call.
+
+    Phone pools for selfies/mirror; mirrorless/DSLR pool otherwise.
+    The variation across calls is intentional — keeps a feed series
+    looking like real shots from different days rather than one body.
+    """
     if capture_style == "SELFIE":
-        return (
-            "Captured with a smartphone front camera (selfie lens) — "
-            "wide-angle, all-in-focus, slight characteristic phone-camera "
-            "perspective distortion at close range."
-        )
+        return random.choice(SELFIE_CAMERA_POOL)
     if capture_style == "MIRROR_SELFIE":
-        return (
-            "Captured with a smartphone rear camera held by the subject, "
-            "photographing the mirror reflection — wide-angle phone lens, "
-            "all-in-focus, real phone-photo look."
-        )
-    return (
-        "Shot on a 35mm full-frame camera, 50mm lens at f/2.8 — natural "
-        "shallow depth of field with soft background separation."
-    )
+        return random.choice(MIRROR_SELFIE_CAMERA_POOL)
+    return random.choice(EDITORIAL_CAMERA_POOL)
 
 
 # ----------------------------------------------------------------------------
@@ -233,14 +253,15 @@ OPENER_PHONE = (
 )
 
 LIGHTING_POOL = [
-    "Late afternoon window light from one side — directional and uneven, sculpting cheekbone and jawline, deep shadow on the opposite half of the face, no fill light, slightly underexposed on the shadow side.",
-    "Overcast daylight from above — visible shadow under brows and chin, slight under-eye darkness, cool neutral cast, no symmetric fill light.",
+    "Late afternoon window light from one side — strong directional, sculpting cheekbone and jawline, deep shadow on the opposite half of the face, no fill light, shadow side noticeably underexposed.",
+    "Overcast daylight with a tall window or building edge to one side — diffuse but still directional, visible nose shadow on one cheek, brow / chin shadows present, cool neutral cast.",
     "Golden hour low warm sun from one side — strong directional warm key light, hard shadow on the opposite cheek, slight rim glow on hair, real outdoor exposure (not lifted).",
-    "Mixed indoor practical lighting — warm tungsten lamp on one side and cool daylight from a window on the other, color-temperature split across the face, naturalistic uneven exposure.",
-    "Morning side light through a tall window — directional cool key, micro-shadows defining the nose bridge and jaw, no symmetric beauty fill.",
-    "Blue hour twilight with mixed warm street lights — atmospheric uneven face shadows, low overall light level, color contrast across the features.",
-    "Single overhead practical (pendant lamp or ceiling fixture) — top-down light with deep shadow pockets under brows and chin, dramatic but real indoor lighting.",
-    "Bounced indoor afternoon light, slightly under-lit overall — mid-tone face with low overall contrast, no harsh fill, the honestly imperfect exposure of a real grabbed phone moment.",
+    "Mixed indoor practical lighting — warm tungsten lamp on one side and cool daylight from a window on the other, color-temperature split across the face, decisive nose shadow.",
+    "Morning side light through a tall window — directional cool key, sharp micro-shadows defining the nose bridge and jaw, no symmetric beauty fill.",
+    "Blue hour twilight with a single warm street light to one side — atmospheric directional face shadows, low overall light level, strong color contrast across features.",
+    "Single overhead practical (pendant lamp or ceiling fixture) — top-down light with deep shadow pockets under brows / eyes / chin, dramatic but real indoor lighting.",
+    "Split lighting from a single window at 90° to the face — one half of the face in clear light, the other half in deep shadow, the nose dividing the two zones.",
+    "Hard afternoon sunlight slicing in from one side at low angle — strong directional key, well-defined cast shadows on face, exposed for the lit side so shadow side falls dark.",
 ]
 
 # Permanent face-lighting directive — included in every editorial realism
@@ -249,13 +270,15 @@ LIGHTING_POOL = [
 # Real cameras don't do that; pushing the model away from it is one of
 # the highest-leverage anti-AI cues available.
 FACE_LIGHTING_DIRECTIVE = (
-    "Face lighting: directional and uneven. Accept harder shadows on one "
-    "side of the face, visible micro-shadows under the brows / nose bridge "
-    "/ jaw / chin / lower lip, and a slightly under-lit shadow side. Do "
-    "NOT use beauty-box even illumination. Do NOT lift shadows for "
-    "flattering symmetry. Do NOT add fill light to even out the face. "
-    "Real cameras don't render HDR-flat face exposure — embrace honest "
-    "directional light with visible shadow detail."
+    "Face must be SCULPTED by directional light — one clear key light "
+    "source casting decisive shadows. Use Rembrandt, split, or loop "
+    "lighting: visible nose shadow falling across one cheek, a clearly "
+    "darker shadow side of the face, micro-shadows defining brows / "
+    "eye sockets / under-nose / lip line / jaw / chin. The face has "
+    "VOLUME because shadows define it — accept that the shadow side "
+    "loses detail. NO softbox-everywhere fill light, NO ring light, "
+    "NO lifted shadows for flattering symmetry, NO HDR-flat face. "
+    "This is the single most important anti-AI cue."
 )
 
 POSE_POOL = [
@@ -275,10 +298,9 @@ COMPOSITION_POOL = [
 ]
 
 SKIN_AND_TEXTURE_DIRECTIVE = (
-    "Skin: real human texture with visible pores, subtle natural blemishes, "
-    "slight redness in cheeks, faint asymmetry between left and right side of "
-    "face. Skin tone varies slightly between face, neck, and hands. Absolutely "
-    "no beauty retouching, no smoothing filter, no airbrushed plastic skin."
+    "Skin: real human texture with visible pores, subtle blemishes, faint "
+    "cheek redness, tone varying slightly between face / neck / hands. "
+    "No retouching, no smoothing, no plastic airbrushed skin."
 )
 
 # Face realism — targets the deeper AI tells beyond skin texture: symmetric
@@ -288,17 +310,37 @@ SKIN_AND_TEXTURE_DIRECTIVE = (
 # imperfect features and named asymmetries so the model can't default to
 # the polished face.
 FACE_REALISM_DIRECTIVE = (
-    "Face: a real ordinary person, NOT a model or actor. Build in subtle "
-    "natural asymmetry — eyebrows at slightly different heights, one eye "
-    "marginally different from the other, mouth corners not perfectly level, "
-    "nostrils not identical. Eyes: natural redness in the tear-duct corners, "
-    "faintly visible blood vessels in the whites, iris with organic texture "
-    "(not gem-clear), catchlights asymmetric from the actual key light. "
-    "Mouth: natural lip texture with subtle vertical lines; if teeth show, "
-    "they have slight color variation rather than uniform white. Hair: "
-    "natural fly-aways and individual strand variation, not photoshoot-perfect "
-    "placement. Avoid doll-like proportions, oversized eyes, overly defined "
-    "jawline, glassy/plastic appearance, or beauty-filter face."
+    "Face: an ordinary real person, not a model. Subtle asymmetry between "
+    "eyes / eyebrows / mouth corners / nostrils. Iris with organic texture "
+    "(not gem-clear), faint redness in tear ducts, asymmetric catchlights. "
+    "Natural lip texture, slightly varied teeth color if visible. Hair with "
+    "real fly-aways. No doll proportions, oversized eyes, defined-too-much "
+    "jawline, or glassy beauty-filter face."
+)
+
+# Candid behavior — a different axis from POSE_POOL. Pose covers the body's
+# overall stance; behavior covers gaze, micro-expression, and small actions
+# that signal "not posed". External guides flag candid moment language
+# as one of the highest-leverage anti-AI cues for portraits.
+CANDID_BEHAVIOR_POOL = [
+    "Caught mid-blink with eyelids halfway down — shutter pressed a fraction too early.",
+    "Looking past the camera at something just out of frame, attention clearly elsewhere — not performing for the lens.",
+    "Mid-sentence expression with mouth slightly parted, the photo caught between words.",
+    "A real half-smile fading after a genuine laugh, not a posed grin — eyes engaged, cheeks slightly raised.",
+    "Glancing back over one shoulder mid-turn, body still in motion, a frame snapped during the turn.",
+    "Adjusting hair or clothing with one hand, gaze unfocused on the camera, a real in-between moment.",
+    "Subtle natural micro-expression — one eyebrow slightly raised, lip corner faintly asymmetric — a real momentary feeling, not a held pose.",
+    "Eyes drifting off-axis from the lens by a few degrees, as if the subject is half-listening to someone behind the camera.",
+]
+
+# Body proportions — another consistent AI tell. Models default to idealized
+# fashion-magazine figures: oversized eyes, long legs, 8-head body ratios.
+# Anchor the figure to the references and reject the stretch.
+BODY_PROPORTION_DIRECTIVE = (
+    "Natural, realistic human proportions — an ordinary real-person "
+    "figure, matching the references as they actually look. Hands: "
+    "real everyday size, five fingers in correct length ratio, no "
+    "swollen or pinched fingers. No idealization."
 )
 
 FILM_STOCK_POOL = [
@@ -325,25 +367,23 @@ STYLE_REFS = [
 ]
 
 NEGATIVE_DIRECTIVE_EDITORIAL = (
-    "Avoid: AI-generated look, plastic skin, perfectly symmetric features, "
-    "doll-like face, oversized eyes, model / actor / photoshoot face, "
-    "glamour-shot pose, influencer-perfect smile, photoshopped retouching, "
-    "stock-photo composition, oversaturated digital colors, dead-center "
-    "passport-photo framing, AND ESPECIALLY do NOT crop the subject tighter "
-    "than the requested framing — respect the view directive's crop boundary."
+    "Avoid: AI look, plastic skin, symmetric features, doll face, "
+    "oversized eyes, photoshoot pose, glamour smile, photoshopped "
+    "retouching, stock-photo composition, oversaturated colors, "
+    "dead-center framing. CRITICAL: do not crop tighter than the "
+    "requested view."
 )
 NEGATIVE_DIRECTIVE_PHONE = (
-    "Avoid: glossy editorial polish, professional studio look, perfect skin "
-    "retouching, model-photoshoot pose — this should look like a casual "
-    "phone photo, not a magazine cover. Also avoid cropping the subject "
-    "tighter than the requested framing."
+    "Avoid: editorial polish, studio look, perfect skin retouching, "
+    "photoshoot pose — should look like a casual phone photo. Do not "
+    "crop tighter than the requested view."
 )
 
 PHONE_LIGHTING_POOL = [
-    "Soft natural light from a window, the kind of light you actually have at home in the late afternoon.",
-    "Mixed indoor practical light - warm overhead lamp and a window, slight color temperature mismatch.",
-    "Outdoor daylight, slightly cloudy, even and unflattering in the real way phone photos are.",
-    "Late evening warm indoor lighting, soft shadows, moody phone shot people take before going out.",
+    "Window light from one side at home in the late afternoon — directional, visible nose shadow, one side of the face brighter than the other.",
+    "Mixed indoor practical light — warm overhead lamp on one side and a window on the other, color-temperature split across the face, decisive nose and jaw shadows.",
+    "Outdoor daylight with the sun behind a single tree or building edge — directional even when slightly cloudy, clear face shadows from the angle.",
+    "Late evening warm indoor lighting from a single bedside or floor lamp to one side — moody directional fall-off, one cheek warmly lit, the other in shadow.",
 ]
 
 PHONE_POSE_POOL = [
@@ -358,47 +398,62 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
     where picks records which pool items were sampled (so callers can
     record them in job inputs for traceability and post-hoc tuning)."""
     is_phone = capture_style in ("SELFIE", "MIRROR_SELFIE")
+    camera = _camera_signature(capture_style)
 
     if is_phone:
         lighting = random.choice(PHONE_LIGHTING_POOL)
         pose = random.choice(PHONE_POSE_POOL)
+        behavior = random.choice(CANDID_BEHAVIOR_POOL)
         return (
             [
                 OPENER_PHONE,
-                _camera_signature(capture_style),
+                camera,
                 lighting,
                 FACE_LIGHTING_DIRECTIVE,
                 pose,
+                behavior,
                 SKIN_AND_TEXTURE_DIRECTIVE,
                 FACE_REALISM_DIRECTIVE,
+                BODY_PROPORTION_DIRECTIVE,
                 NEGATIVE_DIRECTIVE_PHONE,
             ],
-            {"mode": "phone", "lighting": lighting, "pose": pose},
+            {
+                "mode": "phone",
+                "camera": camera,
+                "lighting": lighting,
+                "pose": pose,
+                "behavior": behavior,
+            },
         )
 
     lighting = random.choice(LIGHTING_POOL)
     pose = random.choice(POSE_POOL)
     composition = random.choice(COMPOSITION_POOL)
+    behavior = random.choice(CANDID_BEHAVIOR_POOL)
     film = random.choice(FILM_STOCK_POOL)
     style_ref = random.choice(STYLE_REFS)
     return (
         [
             OPENER_EDITORIAL,
-            _camera_signature(capture_style),
+            camera,
             lighting,
             FACE_LIGHTING_DIRECTIVE,
             pose,
+            behavior,
             composition,
             SKIN_AND_TEXTURE_DIRECTIVE,
             FACE_REALISM_DIRECTIVE,
+            BODY_PROPORTION_DIRECTIVE,
             film,
             style_ref,
             NEGATIVE_DIRECTIVE_EDITORIAL,
         ],
         {
             "mode": "editorial",
+            "camera": camera,
             "lighting": lighting,
             "pose": pose,
+            "behavior": behavior,
             "composition": composition,
             "film": film,
             "style_ref": style_ref,
@@ -541,6 +596,7 @@ def _build_compose_prompt(
         lines.append(FACE_LIGHTING_DIRECTIVE)
         lines.append(SKIN_AND_TEXTURE_DIRECTIVE)
         lines.append(FACE_REALISM_DIRECTIVE)
+        lines.append(BODY_PROPORTION_DIRECTIVE)
         lines.append(NEGATIVE_DIRECTIVE_EDITORIAL)
         final_look = "photorealistic, matching the mood reference's overall look"
 
@@ -562,6 +618,7 @@ def _prepare_compose_inputs(
     weather: str = DEFAULT_WEATHER,
     season: str = DEFAULT_SEASON,
     time_of_day: str = DEFAULT_TIME_OF_DAY,
+    count: int = 1,
     anchor_image_id: str | None = None,
 ) -> dict:
     view = _resolve_view(view)
@@ -679,7 +736,9 @@ def _prepare_compose_inputs(
             "Reduce character reference count or pick fewer items."
         )
 
-    assert_daily_budget_available(estimate_cost(provider_name, quality, len(references)))
+    assert_daily_budget_available(
+        estimate_cost(provider_name, quality, len(references)) * count
+    )
 
     prompt = _build_compose_prompt(
         character,
@@ -709,6 +768,7 @@ def _prepare_compose_inputs(
         "weather": weather,
         "season": season,
         "time_of_day": time_of_day,
+        "count": count,
         "anchor_image_id": anchor_image_id if anchor_ref_position else None,
     }
 
@@ -725,6 +785,7 @@ def enqueue_compose_look(
     weather: str = DEFAULT_WEATHER,
     season: str = DEFAULT_SEASON,
     time_of_day: str = DEFAULT_TIME_OF_DAY,
+    count: int = 1,
     anchor_image_id: str | None = None,
 ) -> str:
     with Session(engine) as session:
@@ -741,6 +802,7 @@ def enqueue_compose_look(
             weather,
             season,
             time_of_day,
+            count,
             anchor_image_id,
         )
         references = prepared["references"]
@@ -767,6 +829,7 @@ def enqueue_compose_look(
                 "weather": prepared["weather"],
                 "season": prepared["season"],
                 "time_of_day": prepared["time_of_day"],
+                "count": prepared["count"],
                 "anchor_image_id": prepared["anchor_image_id"],
             },
             provider=provider_name,
@@ -787,6 +850,7 @@ async def run_compose_job(job_id: str) -> None:
         prompt = job.inputs.get("prompt", "")
         references = job.inputs.get("reference_image_ids", [])
         quality = job.inputs.get("quality", "medium")
+        count = job.inputs.get("count", 1)
         provider_name = job.provider
 
     start = time.monotonic()
@@ -798,6 +862,7 @@ async def run_compose_job(job_id: str) -> None:
                 references=references,
                 aspect_ratio="4:5",
                 quality=quality,
+                count=count,
             )
         )
 

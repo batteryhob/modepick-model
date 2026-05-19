@@ -129,19 +129,20 @@ class OpenAIProvider(ImageGenProvider):
     async def _generate_text_only(self, req: ImageGenRequest) -> ImageGenResult:
         size = SIZE_MAP.get(req.aspect_ratio, "1024x1024")
         quality = QUALITY_MAP.get(req.quality, "medium")
+        payload: dict = {
+            "model": OPENAI_IMAGE_MODEL,
+            "prompt": req.prompt,
+            "n": req.count,
+            "size": size,
+            "quality": quality,
+            "output_format": "png",
+        }
 
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/images/generations",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": OPENAI_IMAGE_MODEL,
-                    "prompt": req.prompt,
-                    "n": req.count,
-                    "size": size,
-                    "quality": quality,
-                    "output_format": "png",
-                },
+                json=payload,
             )
             if resp.status_code != 200:
                 logger.error("OpenAI generations error %s: %s", resp.status_code, resp.text)
@@ -180,7 +181,7 @@ class OpenAIProvider(ImageGenProvider):
                 (field_name, (f"ref_{i}.png", io.BytesIO(img_bytes), "image/png"))
             )
 
-        form_data = {
+        form_data: dict = {
             "model": OPENAI_IMAGE_MODEL,
             "prompt": req.prompt,
             "n": str(req.count),

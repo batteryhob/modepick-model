@@ -134,7 +134,28 @@ export interface FeedPost {
   caption: string | null;
   hashtags: string[];
   posted_at: string | null;
+  ig_media_id: string | null;
+  ig_account_id: string | null;
   created_at: string;
+}
+
+export interface InstagramAccount {
+  id: string;
+  ig_user_id: string;
+  username: string;
+  token_expires_at: string;
+  label: string | null;
+  created_at: string;
+}
+
+export interface InstagramAuthStart {
+  url: string;
+  state: string;
+}
+
+export interface InstagramPublishResult {
+  ig_media_id: string;
+  posted_at: string;
 }
 
 export interface FeedPostUpdate {
@@ -200,6 +221,7 @@ export interface ComposeRequest {
   weather: Weather;
   season: Season;
   time_of_day: TimeOfDay;
+  count: number;
   anchor_image_id?: string | null;
 }
 

@@ -32,6 +32,9 @@ interface ComposerState {
   weather: Weather;
   season: Season;
   timeOfDay: TimeOfDay;
+  // Number of variants (1–4) to generate per click. Default 1; higher
+  // values let the user pick the best from a batch at proportional cost.
+  count: number;
   // anchorImageId — when set, the next compose call uses this image as a
   // reference so the look (hair / makeup / outfit styling) stays
   // consistent across a variation series.
@@ -48,6 +51,7 @@ interface ComposerState {
   setWeather: (weather: Weather) => void;
   setSeason: (season: Season) => void;
   setTimeOfDay: (time: TimeOfDay) => void;
+  setCount: (count: number) => void;
   setAnchorImageId: (id: string | null) => void;
   // Bulk-load every compose-related field from a FeedPost so the user can
   // edit + re-generate. Avoids the noise of calling 10 setters in sequence.
@@ -79,6 +83,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   weather: "AUTO",
   season: "AUTO",
   timeOfDay: "AUTO",
+  count: 1,
   anchorImageId: null,
 
   setActiveCharacter: (id, referenceIds) =>
@@ -101,6 +106,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setWeather: (weather) => set({ weather }),
   setSeason: (season) => set({ season }),
   setTimeOfDay: (time) => set({ timeOfDay: time }),
+  setCount: (count) => set({ count: Math.max(1, Math.min(4, count)) }),
   setAnchorImageId: (id) => set({ anchorImageId: id }),
   hydrateFromFeedPost: ({ characterId, slots, scene, params, anchorImageId }) =>
     set({
