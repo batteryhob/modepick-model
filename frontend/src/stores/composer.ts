@@ -21,6 +21,10 @@ interface HydrationInput {
 }
 
 interface ComposerState {
+  // "look" = standard person-in-outfit compose. "mood" = character-less
+  // ambient / still-life feed image (food, drinks, spaces). The toggle
+  // controls which inputs the page surfaces and which endpoint runs.
+  mode: "look" | "mood";
   activeCharacterId: string | null;
   selectedReferenceIds: string[];
   slots: ComposerSlots;
@@ -40,6 +44,7 @@ interface ComposerState {
   // consistent across a variation series.
   anchorImageId: string | null;
 
+  setMode: (mode: "look" | "mood") => void;
   setActiveCharacter: (id: string | null, referenceIds?: string[]) => void;
   setSelectedReferenceIds: (ids: string[]) => void;
   setSlot: (key: keyof ComposerSlots, value: string | null) => void;
@@ -72,6 +77,7 @@ const emptySlots: ComposerSlots = {
 };
 
 export const useComposerStore = create<ComposerState>((set) => ({
+  mode: "look",
   activeCharacterId: null,
   selectedReferenceIds: [],
   slots: { ...emptySlots },
@@ -86,6 +92,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   count: 1,
   anchorImageId: null,
 
+  setMode: (mode) => set({ mode }),
   setActiveCharacter: (id, referenceIds) =>
     set({
       activeCharacterId: id,
@@ -110,6 +117,7 @@ export const useComposerStore = create<ComposerState>((set) => ({
   setAnchorImageId: (id) => set({ anchorImageId: id }),
   hydrateFromFeedPost: ({ characterId, slots, scene, params, anchorImageId }) =>
     set({
+      mode: params.mode === "mood" ? "mood" : "look",
       activeCharacterId: characterId,
       selectedReferenceIds: params.character_reference_ids ?? [],
       slots: { ...emptySlots, ...slots },
@@ -122,8 +130,9 @@ export const useComposerStore = create<ComposerState>((set) => ({
       // Anchor the next compose on the feed post's own image so the user
       // is set up to make a variation of this exact result. (We ignore
       // params.anchor_image_id — that was the anchor at the time the
-      // post was saved, which is now history.)
-      anchorImageId,
+      // post was saved, which is now history.) Anchor doesn't apply to
+      // mood shots, but we set it for "look" rehydrations.
+      anchorImageId: params.mode === "mood" ? null : anchorImageId,
       quality: params.quality ?? "medium",
     }),
   clearSlots: () => set({ slots: { ...emptySlots }, scene: "" }),

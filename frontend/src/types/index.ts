@@ -122,6 +122,9 @@ export interface ComposeParamsSnapshot {
   time_of_day?: TimeOfDay;
   anchor_image_id?: string | null;
   quality?: "low" | "medium" | "high";
+  // "mood" marks a character-less ambient/still-life post. Omitted or
+  // "look" means the standard person-in-outfit compose flow.
+  mode?: "look" | "mood";
 }
 
 export interface FeedPost {
@@ -228,6 +231,16 @@ export interface ComposeRequest {
 export interface ComposeResponse {
   job_id: string;
   status: "pending";
+}
+
+export interface ComposeMoodRequest {
+  character_id: string;
+  scene: string;
+  location_id: string | null;
+  mood_id: string | null;
+  provider: "openai" | "gemini";
+  quality: "low" | "medium" | "high";
+  count: number;
 }
 
 export interface JobStats {

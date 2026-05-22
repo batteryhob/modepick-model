@@ -6,6 +6,7 @@ import IconButton from "@/components/IconButton";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 import type { WorldLocation, WorldLocationImage } from "@/types";
 
 const MAX_IMAGES_PER_LOCATION = 8;
@@ -13,6 +14,7 @@ const MAX_IMAGES_PER_LOCATION = 8;
 export default function WorldPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadName, setUploadName] = useState("");
@@ -183,8 +185,13 @@ export default function WorldPage() {
           onRemoveImage={(imageRecordId) =>
             removeImageMutation.mutate({ id: detail.id, imageRecordId })
           }
-          onDelete={() => {
-            if (confirm(`"${detail.name}" 을 삭제하시겠습니까?`)) {
+          onDelete={async () => {
+            if (
+              await confirm({
+                message: `"${detail.name}" 을 삭제하시겠습니까?`,
+                destructive: true,
+              })
+            ) {
               deleteMutation.mutate(detail.id);
             }
           }}
@@ -230,6 +237,7 @@ function LocationDetailModal({
   isAdding,
   isRemoving,
 }: DetailProps) {
+  const confirm = useConfirm();
   const atMax = loc.images.length >= MAX_IMAGES_PER_LOCATION;
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
@@ -292,8 +300,13 @@ function LocationDetailModal({
                 {loc.images.length > 1 && (
                   <button
                     aria-label="이미지 삭제"
-                    onClick={() => {
-                      if (confirm("이 이미지를 삭제하시겠습니까?")) {
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          message: "이 이미지를 삭제하시겠습니까?",
+                          destructive: true,
+                        })
+                      ) {
                         onRemoveImage(img.id);
                       }
                     }}

@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 import type { InstagramAccount } from "@/types";
 
 export default function InstagramPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["instagram-accounts"],
@@ -69,8 +71,14 @@ export default function InstagramPage() {
           <AccountRow
             key={account.id}
             account={account}
-            onDelete={() => {
-              if (confirm(`@${account.username} 연결을 해제하시겠습니까?`)) {
+            onDelete={async () => {
+              if (
+                await confirm({
+                  message: `@${account.username} 연결을 해제하시겠습니까?`,
+                  confirmLabel: "연결 해제",
+                  destructive: true,
+                })
+              ) {
                 deleteMutation.mutate(account.id);
               }
             }}

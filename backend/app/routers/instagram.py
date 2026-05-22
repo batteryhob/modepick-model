@@ -11,6 +11,7 @@ from app.services.instagram import (
     InstagramError,
     publish_carousel,
     publish_feed_post,
+    publish_story,
     refresh_token_if_needed,
 )
 
@@ -197,4 +198,82 @@ async def publish_carousel_endpoint(body: dict):
         detail = str(e)
         if e.body:
             detail += f"\n\nResponse: {e.body[:500]}"
+        raise HTTPException(502, detail)
+
+
+@router.post("/publish-stories")
+async def publish_stories_endpoint(body: dict):
+    """Publish 1–10 FeedPosts as sequential Instagram Stories.
+
+    Body: { feed_post_ids: [..], account_id }
+
+    Stories have no caption/hashtag support via the Graph API, so the
+    request payload is simpler than the feed variants. Each story is
+    its own media on IG (no carousel-story concept), so every post
+    gets a unique ig_media_id.
+
+    Stories are published one at a time and committed individually —
+    if the 3rd story fails, the first two are already saved with their
+    ig_media_ids. The error response notes how many succeeded.
+    """
+    feed_post_ids: list[str] = body.get("feed_post_ids") or []
+    account_id = body.get("account_id")
+
+    if not account_id:
+        raise HTTPException(400, "Missing account_id")
+    if not feed_post_ids:
+        raise HTTPException(400, "feed_post_ids must not be empty")
+    if len(feed_post_ids) > 10:
+        raise HTTPException(
+            400, f"feed_post_ids accepts up to 10 stories, got {len(feed_post_ids)}"
+        )
+
+    with Session(engine) as session:
+        post_copies: list[FeedPost] = []
+        for fpid in feed_post_ids:
+            p = session.get(FeedPost, fpid)
+            if not p:
+                raise HTTPException(404, f"Feed post {fpid} not found")
+            post_copies.append(FeedPost(**p.model_dump()))
+        account = session.get(InstagramAccount, account_id)
+        if not account:
+            raise HTTPException(404, "Instagram account not found")
+
+    try:
+        await refresh_token_if_needed(account)
+    except InstagramError:
+        pass
+
+    published: list[dict] = []
+    try:
+        for idx, post_copy in enumerate(post_copies):
+            fpid = feed_post_ids[idx]
+            with Session(engine) as session:
+                fresh = session.get(InstagramAccount, account_id)
+                if not fresh:
+                    raise HTTPException(404, "Account vanished mid-publish")
+                ig_media_id = await publish_story(post_copy, fresh)
+
+            now = datetime.now(timezone.utc)
+            with Session(engine) as session:
+                post = session.get(FeedPost, fpid)
+                if post:
+                    post.ig_media_id = ig_media_id
+                    post.ig_account_id = account_id
+                    post.posted_at = now
+                    session.add(post)
+                    session.commit()
+            published.append({"feed_post_id": fpid, "ig_media_id": ig_media_id})
+
+        return {"published": published, "count": len(published)}
+
+    except InstagramError as e:
+        detail = str(e)
+        if e.body:
+            detail += f"\n\nResponse: {e.body[:500]}"
+        if published:
+            detail += (
+                f"\n\n{len(published)} of {len(post_copies)} stories published "
+                "before failure; already saved."
+            )
         raise HTTPException(502, detail)

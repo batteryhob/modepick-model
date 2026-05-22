@@ -443,6 +443,89 @@ async def publish_carousel(
     return ig_media_id
 
 
+async def publish_story(
+    post: FeedPost,
+    account: InstagramAccount,
+) -> str:
+    """Publish a single FeedPost as an Instagram Story.
+
+    Stories have no caption / hashtag support via the Graph API — text
+    overlays only exist when posting through the IG app. Same 3-step
+    flow as feed: create STORIES container, poll FINISHED, publish.
+
+    There is no carousel-story format. To post multiple stories the
+    caller invokes this once per image; they appear as consecutive
+    frames in the user's story tray.
+    """
+    image_url = _public_image_url(post.image_id)
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{GRAPH_BASE}/{account.ig_user_id}/media",
+            data={
+                "media_type": "STORIES",
+                "image_url": image_url,
+                "access_token": account.access_token,
+            },
+        )
+        if resp.status_code != 200:
+            raise InstagramError(
+                "Failed to create story container",
+                status_code=resp.status_code,
+                body=resp.text,
+            )
+        container_id = resp.json().get("id")
+        if not container_id:
+            raise InstagramError("Story container response missing id", body=resp.text)
+
+    deadline = time.monotonic() + CONTAINER_POLL_MAX_SECONDS
+    async with httpx.AsyncClient(timeout=30) as client:
+        while time.monotonic() < deadline:
+            resp = await client.get(
+                f"{GRAPH_BASE}/{container_id}",
+                params={
+                    "fields": "status_code",
+                    "access_token": account.access_token,
+                },
+            )
+            if resp.status_code != 200:
+                raise InstagramError(
+                    "Failed polling story status",
+                    status_code=resp.status_code,
+                    body=resp.text,
+                )
+            status = resp.json().get("status_code")
+            if status == "FINISHED":
+                break
+            if status in ("ERROR", "EXPIRED"):
+                raise InstagramError(
+                    f"Story container ended in status {status}", body=resp.text
+                )
+            time.sleep(CONTAINER_POLL_INTERVAL_SECONDS)
+        else:
+            raise InstagramError("Story container never reached FINISHED state")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{GRAPH_BASE}/{account.ig_user_id}/media_publish",
+            data={
+                "creation_id": container_id,
+                "access_token": account.access_token,
+            },
+        )
+        if resp.status_code != 200:
+            raise InstagramError(
+                "Failed to publish story",
+                status_code=resp.status_code,
+                body=resp.text,
+            )
+        ig_media_id = resp.json().get("id")
+        if not ig_media_id:
+            raise InstagramError("Story publish response missing id", body=resp.text)
+
+    return ig_media_id
+
+
 def _compose_caption(caption: Optional[str], hashtags: Optional[list]) -> str:
     """Caption + hashtag tail. IG accepts up to 2200 chars / 30 hashtags."""
     body = caption.strip() if caption else ""

@@ -83,6 +83,8 @@ export default function ComposerPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const {
+    mode,
+    setMode,
     activeCharacterId,
     selectedReferenceIds,
     setActiveCharacter,
@@ -110,6 +112,8 @@ export default function ComposerPage() {
     anchorImageId,
     setAnchorImageId,
   } = useComposerStore();
+
+  const isMoodMode = mode === "mood";
 
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
   // resultImageIds holds every image returned by the last successful job.
@@ -145,6 +149,14 @@ export default function ComposerPage() {
 
   const composeMutation = useMutation({
     mutationFn: api.compose,
+    onSuccess: (data) => {
+      setResultJobId(data.job_id);
+      setComposeJobId(data.job_id);
+    },
+  });
+
+  const composeMoodMutation = useMutation({
+    mutationFn: api.composeMood,
     onSuccess: (data) => {
       setResultJobId(data.job_id);
       setComposeJobId(data.job_id);
@@ -214,7 +226,8 @@ export default function ComposerPage() {
   // Elapsed time during compose for the progress indicator.
   const composeStartedAtRef = useRef<number | null>(null);
   const [composeElapsed, setComposeElapsed] = useState(0);
-  const inProgress = composeMutation.isPending || !!composeJobId;
+  const inProgress =
+    composeMutation.isPending || composeMoodMutation.isPending || !!composeJobId;
 
   useEffect(() => {
     if (!inProgress) {
@@ -255,15 +268,19 @@ export default function ComposerPage() {
   // selected product's images, not just one — multiple angles improve fidelity.
   // Character contributes len(selectedReferenceIds) — empty selection falls
   // back to a single FACE_FRONT on the backend, so count it as 1.
-  const charRefCount = activeChar
-    ? selectedReferenceIds.length > 0
-      ? selectedReferenceIds.length
-      : 1
-    : 0;
-  const productRefCount = WARDROBE_SLOTS.reduce(
-    (sum, s) => sum + (getSlotItem(s.key)?.images.length ?? 0),
-    0,
-  );
+  // Mood-mode shots have no character / wardrobe refs.
+  const charRefCount =
+    isMoodMode || !activeChar
+      ? 0
+      : selectedReferenceIds.length > 0
+        ? selectedReferenceIds.length
+        : 1;
+  const productRefCount = isMoodMode
+    ? 0
+    : WARDROBE_SLOTS.reduce(
+        (sum, s) => sum + (getSlotItem(s.key)?.images.length ?? 0),
+        0,
+      );
   const moodRefCount = slots.mood ? 1 : 0;
   const locationRefCount = getLocationItem()?.images.length ?? 0;
   const totalRefs = charRefCount + productRefCount + moodRefCount + locationRefCount;
@@ -280,6 +297,20 @@ export default function ComposerPage() {
     setResultImageIds([]);
     setResultCost(0);
     setComposeError(null);
+
+    if (isMoodMode) {
+      composeMoodMutation.mutate({
+        character_id: charId,
+        scene,
+        location_id: slots.location,
+        mood_id: slots.mood,
+        provider,
+        quality,
+        count,
+      });
+      return;
+    }
+
     composeMutation.mutate({
       character_id: charId,
       slots,
@@ -302,6 +333,30 @@ export default function ComposerPage() {
     if (!charId || !resultImageId) return;
     if (saveFeedMutation.isPending) return;
 
+    if (isMoodMode) {
+      // Mood posts only carry location + mood in slots; wardrobe slots stay
+      // null. compose_params records mode="mood" so re-loading from the
+      // feed brings the page back to mood mode.
+      saveFeedMutation.mutate({
+        character_id: charId,
+        image_id: resultImageId,
+        slots: {
+          hat: null,
+          top: null,
+          bottom: null,
+          outerwear: null,
+          dress: null,
+          bag: null,
+          shoes: null,
+          mood: slots.mood,
+          location: slots.location,
+        },
+        scene,
+        compose_params: { mode: "mood", quality },
+      });
+      return;
+    }
+
     saveFeedMutation.mutate({
       character_id: charId,
       image_id: resultImageId,
@@ -310,6 +365,7 @@ export default function ComposerPage() {
       // Snapshot every compose-related knob so the feed page can later
       // reload the full setup and let the user re-compose with edits.
       compose_params: {
+        mode: "look",
         character_reference_ids: selectedReferenceIds,
         view,
         capture_style: captureStyle,
@@ -362,14 +418,47 @@ export default function ComposerPage() {
     <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-8rem)]">
       {/* Left: Slots */}
       <div className="w-full lg:w-[340px] lg:flex-shrink-0 lg:overflow-y-auto space-y-2 lg:pr-1">
-        {/* Character Slot */}
+        {/* Mode toggle — look = person-in-outfit, mood = ambient/still-life
+            shot of the same world (food, drinks, props). Mood mode hides
+            wardrobe / view / capture / environment knobs since none apply. */}
+        <div className="flex gap-1 p-0.5 bg-gray-100 rounded-md">
+          <button
+            type="button"
+            onClick={() => setMode("look")}
+            disabled={inProgress}
+            className={`flex-1 px-3 py-1.5 text-sm rounded ${
+              !isMoodMode
+                ? "bg-white shadow-sm font-medium"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            인물 컷
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("mood")}
+            disabled={inProgress}
+            className={`flex-1 px-3 py-1.5 text-sm rounded ${
+              isMoodMode
+                ? "bg-white shadow-sm font-medium"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            title="음식·음료·소품·공간 등 세계관에 묻어가는 무드 컷"
+          >
+            무드 컷
+          </button>
+        </div>
+
+        {/* Character Slot — kept visible in both modes. In mood mode it's
+            just "whose feed does this belong to" (no character refs sent
+            to the model). */}
         <div
           className="border rounded-lg p-3 bg-white cursor-pointer hover:bg-gray-50 border-l-4 border-l-gray-900"
           onClick={() => setPickerOpen("character")}
         >
           <p className="text-xs font-mono text-gray-400 mb-1">
-            캐릭터
-            {activeChar && (
+            {isMoodMode ? "캐릭터 (피드 소유자)" : "캐릭터"}
+            {activeChar && !isMoodMode && (
               <span className="ml-1 text-gray-500">· 레퍼런스 {charRefCount}장</span>
             )}
           </p>
@@ -387,8 +476,8 @@ export default function ComposerPage() {
           )}
         </div>
 
-        {/* Wardrobe Slots */}
-        {WARDROBE_SLOTS.map((slot) => {
+        {/* Wardrobe Slots — only in look mode */}
+        {!isMoodMode && WARDROBE_SLOTS.map((slot) => {
           const item = getSlotItem(slot.key);
           const cover = item?.images[0];
           return (
@@ -450,7 +539,7 @@ export default function ComposerPage() {
           className={`border rounded-lg p-3 bg-white cursor-pointer hover:bg-gray-50 border-l-4 ${
             slots.location ? "border-l-indigo-500" : "border-l-gray-200"
           }`}
-          onClick={() => setPickerOpen("world")}
+          onClick={() => setPickerOpen("location")}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
@@ -542,12 +631,20 @@ export default function ComposerPage() {
           </div>
         </div>
 
-        {/* Mood is the dominant aesthetic signal. When it's set, the
-            parametric knobs (view / capture style / environment) are
-            suppressed in the prompt — we hide them entirely from the UI
-            too so "what you see is what's active". When mood is empty,
-            the full set of knobs is back. */}
-        {slots.mood ? (
+        {/* In mood mode, view / capture / environment don't apply (no
+            person in frame). In look mode the visibility flips on the
+            mood slot: with a mood ref the parametric knobs are suppressed
+            in the prompt so we hide them here too ("what you see is
+            what's active"); without a mood ref the full knobs are back. */}
+        {isMoodMode ? (
+          <div className="border border-indigo-200 bg-indigo-50 rounded-lg p-3 text-xs text-indigo-800 leading-snug">
+            <p className="font-medium">무드 컷 모드</p>
+            <p className="mt-0.5 text-indigo-700">
+              세계관(장소) + 무드 + 프롬프트만 사용해 인물 없는 무드 / 정물 컷을
+              만듭니다. 의상·뷰·캡처·환경 슬롯은 사용하지 않습니다.
+            </p>
+          </div>
+        ) : slots.mood ? (
           <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-xs text-amber-800 leading-snug">
             <p className="font-medium">무드로 자동 적용 중</p>
             <p className="mt-0.5 text-amber-700">
@@ -635,11 +732,17 @@ export default function ComposerPage() {
 
         {/* Free-form prompt (장소·소품·날씨·표정 등 무엇이든) */}
         <div className="border rounded-lg p-3 bg-white">
-          <p className="text-xs font-mono text-gray-400 mb-1">프롬프트</p>
+          <p className="text-xs font-mono text-gray-400 mb-1">
+            {isMoodMode ? "무엇을 찍을까요" : "프롬프트"}
+          </p>
           <textarea
             value={scene}
             onChange={(e) => setScene(e.target.value)}
-            placeholder="도쿄 시부야 카페, 오후 햇살, 선글라스 착용, 커피 들고 있음..."
+            placeholder={
+              isMoodMode
+                ? "아이스 매트차 라떼, 리넨 위에 놓인 작은 책과 함께..."
+                : "도쿄 시부야 카페, 오후 햇살, 선글라스 착용, 커피 들고 있음..."
+            }
             className="w-full text-sm border-0 p-0 resize-none focus:ring-0 focus:outline-none"
             rows={2}
           />
@@ -687,8 +790,10 @@ export default function ComposerPage() {
 
         {/* Active anchor indicator — visible whenever an anchor is set,
             even if it isn't the currently displayed result. Lets the user
-            see at a glance "I'm building a series locked to that image." */}
-        {anchorImageId && (
+            see at a glance "I'm building a series locked to that image."
+            Anchor only applies to look mode (locks a person's rendered
+            look) — hidden in mood mode. */}
+        {anchorImageId && !isMoodMode && (
           <div className="border border-amber-200 bg-amber-50 rounded-md p-2 flex items-center gap-2 text-xs">
             <img
               src={imageUrl(anchorImageId)}
@@ -719,7 +824,9 @@ export default function ComposerPage() {
             ? "합성 중..."
             : totalRefs > maxRefs
               ? "이미지 줄이세요"
-              : "룩 생성 (⌘↵)"}
+              : isMoodMode
+                ? "무드 컷 생성 (⌘↵)"
+                : "룩 생성 (⌘↵)"}
         </button>
       </div>
 
@@ -832,10 +939,12 @@ export default function ComposerPage() {
           </div>
         )}
 
-        {(composeMutation.isError || composeError) && (
+        {(composeMutation.isError || composeMoodMutation.isError || composeError) && (
           <div className="w-full max-w-md mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-600">
-              {composeError || (composeMutation.error as Error).message}
+              {composeError ||
+                ((composeMutation.error || composeMoodMutation.error) as Error)
+                  ?.message}
             </p>
           </div>
         )}
@@ -845,9 +954,11 @@ export default function ComposerPage() {
       <div className="w-full lg:w-[300px] lg:flex-shrink-0 lg:overflow-y-auto">
         <div className="border rounded-lg p-4 bg-white space-y-4">
           <div>
-            <p className="text-xs font-mono text-gray-400 mb-2">이번 호출 레퍼런스</p>
+            <p className="text-xs font-mono text-gray-400 mb-2">
+              {isMoodMode ? "이번 호출 (무드 컷)" : "이번 호출 레퍼런스"}
+            </p>
             <div className="space-y-1 text-sm">
-              {activeChar && (
+              {activeChar && !isMoodMode && (
                 <p className="text-gray-600">
                   캐릭터 레퍼런스 x {charRefCount}
                 </p>

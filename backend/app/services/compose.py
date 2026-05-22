@@ -461,6 +461,267 @@ def _photorealism_directives(capture_style: str) -> tuple[list[str], dict]:
     )
 
 
+# ----------------------------------------------------------------------------
+# Mood-shot variant — character-less ambient / still-life shots for the
+# persona's feed. Same project, different post type: food, drinks, props,
+# spaces. Re-uses the world location + mood ref infrastructure; ignores
+# the wardrobe / view / capture / face-realism axes that only apply to
+# people. Has its own tighter realism pools so face-sculpting language
+# (which dominates LIGHTING_POOL etc.) doesn't leak into object shots.
+# ----------------------------------------------------------------------------
+
+OPENER_MOOD_SHOT = (
+    "Hyperrealistic still-life / ambient photograph — an object, detail, "
+    "or scene shot for a persona's Instagram feed. NO PEOPLE in this "
+    "image: no human figures, no faces, no hands, no body parts visible. "
+    "The subject is the objects and setting described below, captured "
+    "candidly as if quickly snapped on a real day and posted online — "
+    "not a product shot."
+)
+
+MOOD_SHOT_LIGHTING_POOL = [
+    "Late afternoon window light from one side — directional, soft falloff into shadow, warm color cast.",
+    "Overcast diffuse daylight through a tall window — soft even illumination, cool neutral tone.",
+    "Golden hour low warm sun raking across the surface — long soft shadows, warm cast.",
+    "Single overhead practical lamp — top-down light with concentrated highlight and deep ambient shadow.",
+    "Mixed indoor practical lighting — warm tungsten on one side and cool daylight from a window on the other, color-temperature split across the scene.",
+    "Soft side window light bouncing off a nearby wall — gentle directional fill, real-room ambient feel.",
+    "Blue hour twilight with a warm interior practical — atmospheric low light, mixed cool/warm color cast.",
+]
+
+MOOD_SHOT_COMPOSITION_POOL = [
+    "Slightly off-center composition with real-room negative space — not a styled product shot.",
+    "Casual handheld framing with environment context at the edges (table edge, wall corner, a sliver of window) — captured incidentally.",
+    "Tight on the main subject with shallow depth of field, real-environment context visible at the edges.",
+    "Wider environmental framing — the main subject sits within the surrounding place context, not isolated.",
+    "Overhead flat-lay or 45° casual angle, as if grabbed quickly for a story, not magazine-styled.",
+]
+
+NEGATIVE_DIRECTIVE_MOOD_SHOT = (
+    "Avoid: studio product shot, e-commerce styling, sterile white backdrop, "
+    "overly clean composition, perfectly symmetric arrangement, oversaturated "
+    "colors, stock-photo polish, dead-center placement. This must look like "
+    "a real casual frame from a person's everyday phone, not a catalog image."
+)
+
+
+def _mood_shot_realism_directives() -> tuple[list[str], dict]:
+    """Realism block for object / scene shots. Pulls from mood-shot pools
+    instead of person-focused ones. Excludes face / body / pose
+    directives since they don't apply."""
+    camera = random.choice(EDITORIAL_CAMERA_POOL)
+    lighting = random.choice(MOOD_SHOT_LIGHTING_POOL)
+    composition = random.choice(MOOD_SHOT_COMPOSITION_POOL)
+    film = random.choice(FILM_STOCK_POOL)
+    style_ref = random.choice(STYLE_REFS)
+    return (
+        [
+            OPENER_MOOD_SHOT,
+            camera,
+            lighting,
+            composition,
+            film,
+            style_ref,
+            NEGATIVE_DIRECTIVE_MOOD_SHOT,
+        ],
+        {
+            "mode": "mood_shot",
+            "camera": camera,
+            "lighting": lighting,
+            "composition": composition,
+            "film": film,
+            "style_ref": style_ref,
+        },
+    )
+
+
+def _build_mood_shot_prompt(
+    scene: str,
+    location: WorldLocation | None,
+    location_ref_positions: list[int],
+    mood: MoodReference | None,
+    mood_ref_position: int | None,
+) -> str:
+    """Prompt for a character-less ambient / still-life feed image.
+
+    When a mood reference is provided it dominates the aesthetic (same
+    behavior as people shots): we skip the realism pool so it doesn't
+    fight the mood image's lighting / film / palette. Otherwise we
+    layer in the mood-shot realism block.
+    """
+    lines: list[str] = []
+
+    if scene:
+        lines.append(f"Subject of this image: {scene}.")
+    else:
+        lines.append(
+            "Subject of this image: an ambient detail from the persona's "
+            "day — let the location and mood references determine what feels "
+            "natural to show."
+        )
+
+    mood_active = mood is not None and mood_ref_position is not None
+    if mood_active:
+        lines.append(
+            f"Apply the COMPLETE visual aesthetic from reference image {mood_ref_position} "
+            "— lighting, color grading, atmosphere, framing and composition, time-of-day "
+            "quality, film look, and overall mood. Match the reference's visual style "
+            "exactly. Do NOT copy the people or objects from this reference, only its "
+            "aesthetic."
+        )
+
+    if location and location_ref_positions:
+        if len(location_ref_positions) == 1:
+            lines.append(
+                f"Setting: the scene takes place at a specific real place. Reference image "
+                f"{location_ref_positions[0]} is INFORMATIONAL — it may be a photograph, "
+                "floor plan, layout diagram, or sketch describing this place. READ it to "
+                "understand the space (layout, key features, materials, spatial relationships) "
+                "but do NOT render the reference's drawing/diagram style. The output must be a "
+                "real photograph OF this place, not a copy of the reference image itself."
+            )
+        else:
+            ref_nums = ", ".join(str(n) for n in location_ref_positions)
+            lines.append(
+                f"Setting: the scene takes place at a specific real place. Reference images "
+                f"{ref_nums} are INFORMATIONAL — they may be photographs, floor plans, layout "
+                "diagrams, or sketches describing the SAME physical place. READ them together to "
+                "understand the space's layout, key architectural features, materials, and "
+                "spatial relationships, but do NOT render the references' drawing/diagram style. "
+                "The output must be a real photograph OF this place, not a copy of any reference."
+            )
+
+    if mood_active:
+        # Mood-dominant: keep only the universal "no-people" reinforcement.
+        # The mood ref provides lighting / composition / film direction.
+        lines.append(OPENER_MOOD_SHOT)
+        lines.append(NEGATIVE_DIRECTIVE_MOOD_SHOT)
+        final_look = "photorealistic, matching the mood reference's overall look"
+    else:
+        realism_lines, _picks = _mood_shot_realism_directives()
+        lines.extend(realism_lines)
+        final_look = "indistinguishable from a real phone or DSLR photo"
+
+    lines.append(f"4:5 aspect ratio, {final_look}.")
+    return "\n".join(lines)
+
+
+def _prepare_mood_shot_inputs(
+    session: Session,
+    character_id: str,
+    scene: str,
+    location_id: str | None,
+    mood_id: str | None,
+    provider_name: str,
+    quality: str,
+    count: int,
+) -> dict:
+    """Build the prompt + reference list for a mood shot. The character_id
+    only enforces ownership for the resulting FeedPost (every feed post is
+    attached to a persona); no character references are sent to the model.
+    """
+    character = session.get(Character, character_id)
+    if not character:
+        raise ValueError(f"Character {character_id} not found")
+
+    references: list[dict] = []
+    mood: MoodReference | None = None
+    mood_ref_position: int | None = None
+    location: WorldLocation | None = None
+    location_ref_positions: list[int] = []
+
+    if mood_id:
+        mood = session.get(MoodReference, mood_id)
+        if mood:
+            mood_ref_position = len(references) + 1
+            references.append({"role": "mood", "image_id": mood.image_id})
+
+    if location_id:
+        location = session.get(WorldLocation, location_id)
+        if location and location.images:
+            for img in location.images:
+                pos = len(references) + 1
+                references.append(
+                    {"role": f"location_{img.sort_order}", "image_id": img.image_id}
+                )
+                location_ref_positions.append(pos)
+
+    limit = REFERENCE_LIMITS.get(provider_name, 16)
+    if len(references) > limit:
+        raise ValueError(
+            f"Too many references ({len(references)}). Max for {provider_name}: {limit}."
+        )
+
+    assert_daily_budget_available(
+        estimate_cost(provider_name, quality, len(references)) * count
+    )
+
+    prompt = _build_mood_shot_prompt(
+        scene=scene,
+        location=location,
+        location_ref_positions=location_ref_positions,
+        mood=mood,
+        mood_ref_position=mood_ref_position,
+    )
+
+    return {
+        "prompt": prompt,
+        "references": references,
+        "count": count,
+    }
+
+
+def enqueue_compose_mood_shot(
+    character_id: str,
+    scene: str,
+    location_id: str | None,
+    mood_id: str | None,
+    provider_name: str,
+    quality: str,
+    count: int = 1,
+) -> str:
+    """Queue a character-less mood / ambient shot. The result is a normal
+    GenerationJob (type="compose_mood") that flows through the same
+    run_compose_job pipeline as look composes — just with a different
+    prompt and no character / wardrobe references.
+    """
+    with Session(engine) as session:
+        prepared = _prepare_mood_shot_inputs(
+            session,
+            character_id=character_id,
+            scene=scene,
+            location_id=location_id,
+            mood_id=mood_id,
+            provider_name=provider_name,
+            quality=quality,
+            count=count,
+        )
+
+        job = GenerationJob(
+            type="compose_mood",
+            character_id=character_id,
+            inputs={
+                "prompt": prepared["prompt"],
+                "reference_image_ids": [
+                    {"role": r["role"], "image_id": r["image_id"]}
+                    for r in prepared["references"]
+                ],
+                "scene": scene,
+                "location_id": location_id,
+                "mood_id": mood_id,
+                "quality": quality,
+                "count": prepared["count"],
+            },
+            provider=provider_name,
+            model=f"{provider_name}-image",
+            status="pending",
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job.id
+
+
 def _build_compose_prompt(
     character: Character,
     filled_slots: dict[str, WardrobeItem],
@@ -549,17 +810,22 @@ def _build_compose_prompt(
     if location and location_ref_positions:
         if len(location_ref_positions) == 1:
             lines.append(
-                f"Setting: the scene takes place at the location shown in reference image "
-                f"{location_ref_positions[0]} — render this exact place (architecture, "
-                "room features, wall colors, environmental details) consistently."
+                f"Setting: the scene takes place at a specific real place. Reference image "
+                f"{location_ref_positions[0]} is INFORMATIONAL — it may be a photograph, "
+                "floor plan, layout diagram, or sketch describing this place. READ it to "
+                "understand the space (layout, key features, materials, spatial relationships) "
+                "but do NOT render the reference's drawing/diagram style. The output must be a "
+                "real photograph OF this place, not a copy of the reference image itself."
             )
         else:
             ref_nums = ", ".join(str(n) for n in location_ref_positions)
             lines.append(
-                f"Setting: the scene takes place at the location shown in reference images "
-                f"{ref_nums} (same physical place from multiple angles). Render the same "
-                "architecture, room features, wall colors, lighting, and environmental "
-                "details consistently — this is a recurring place the subject frequents."
+                f"Setting: the scene takes place at a specific real place. Reference images "
+                f"{ref_nums} are INFORMATIONAL — they may be photographs, floor plans, layout "
+                "diagrams, or sketches describing the SAME physical place. READ them together to "
+                "understand the space's layout, key architectural features, materials, and "
+                "spatial relationships, but do NOT render the references' drawing/diagram style. "
+                "The output must be a real photograph OF this place, not a copy of any reference."
             )
 
     # Environment + parametric knobs only apply when mood isn't dominating.

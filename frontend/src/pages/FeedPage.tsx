@@ -6,12 +6,14 @@ import { PublishToInstagramModal } from "@/components/PublishToInstagramModal";
 import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/Confirm";
 import { useComposerStore } from "@/stores/composer";
 import type { FeedPost } from "@/types";
 
 export default function FeedPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   // Array (not Set) so we preserve the order the user clicked things in —
   // that order becomes the carousel page order on Instagram.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -179,8 +181,13 @@ export default function FeedPage() {
           index={viewerIndex}
           setIndex={setViewerIndex}
           onClose={() => setViewerIndex(null)}
-          onDelete={(id) => {
-            if (confirm("이 게시물을 삭제하시겠습니까?")) {
+          onDelete={async (id) => {
+            if (
+              await confirm({
+                message: "이 게시물을 삭제하시겠습니까?",
+                destructive: true,
+              })
+            ) {
               deleteMutation.mutate(id);
             }
           }}

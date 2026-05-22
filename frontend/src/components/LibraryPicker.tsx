@@ -4,7 +4,7 @@ import IconButton from "@/components/IconButton";
 import type { Character, WardrobeItem, MoodReference, WorldLocation } from "@/types";
 
 interface Props {
-  type: string; // "character" | wardrobe category | "mood" | "world"
+  type: string; // "character" | wardrobe category | "mood" | "location"
   characters: Character[];
   wardrobeItems: WardrobeItem[];
   moods: MoodReference[];
@@ -91,7 +91,7 @@ export default function LibraryPicker({
       image_id: m.image_id,
       sub: m.tags,
     }));
-  } else if (type === "world") {
+  } else if (type === "location") {
     title = "세계관 (장소) 선택";
     items = locations.map((loc) => ({
       id: loc.id,

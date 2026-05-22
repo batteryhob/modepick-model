@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, imageUrl } from "@/api/client";
 import IconButton from "@/components/IconButton";
 import PageHeader from "@/components/PageHeader";
+import { useConfirm } from "@/components/Confirm";
 import type { Character } from "@/types";
 
 const PERSONA_FIELDS = [
@@ -30,6 +31,7 @@ function levelLabelFor(count: number): string {
 
 export default function CharactersPage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [persona, setPersona] = useState<Record<string, string>>({});
@@ -173,7 +175,14 @@ export default function CharactersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("이 캐릭터를 삭제하시겠습니까?")) return;
+    const char = characters.find((c) => c.id === id);
+    const ok = await confirm({
+      message: char
+        ? `"${char.name}" 캐릭터를 삭제하시겠습니까?`
+        : "이 캐릭터를 삭제하시겠습니까?",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.characters.delete(id);
       queryClient.invalidateQueries({ queryKey: ["characters"] });
@@ -183,20 +192,20 @@ export default function CharactersPage() {
     }
   };
 
-  const handleExpand = (char: Character, target: number) => {
+  const handleExpand = async (char: Character, target: number) => {
     const current = char.references?.length || 0;
     const missing = target - current;
     if (missing <= 0) return;
     const estCost = (missing * 0.02).toFixed(2);
     const estMin = Math.max(1, Math.round((missing * 70) / 60));
-    if (
-      !confirm(
-        `${target}장으로 확장 — ${missing}장 추가 생성 (~$${estCost}, 약 ${estMin}분 소요).\n` +
-          "현재 캐릭터의 base 이미지를 참조해 같은 인물의 다른 각도/표정을 만듭니다.\n계속하시겠습니까?",
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `${target}장으로 확장`,
+      message:
+        `${missing}장 추가 생성 (~$${estCost}, 약 ${estMin}분 소요)\n\n` +
+        "현재 캐릭터의 base 이미지를 참조해 같은 인물의 다른 각도/표정을 만듭니다.",
+      confirmLabel: "계속",
+    });
+    if (!ok) return;
     setExpandTargetCount(target);
     setExpandInitialRefCount(current);
     setExpandError(null);

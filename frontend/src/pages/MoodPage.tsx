@@ -4,10 +4,12 @@ import { useDropzone } from "react-dropzone";
 import { api, imageUrl } from "@/api/client";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import PageHeader from "@/components/PageHeader";
+import { useConfirm } from "@/components/Confirm";
 import type { MoodReference } from "@/types";
 
 export default function MoodPage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState("");
@@ -103,8 +105,15 @@ export default function MoodPage() {
                 className="w-full h-full object-cover cursor-zoom-in"
               />
               <button
-                onClick={() => {
-                  if (confirm("이 무드를 삭제하시겠습니까?")) deleteMutation.mutate(mood.id);
+                onClick={async () => {
+                  if (
+                    await confirm({
+                      message: `"${mood.name}" 무드를 삭제하시겠습니까?`,
+                      destructive: true,
+                    })
+                  ) {
+                    deleteMutation.mutate(mood.id);
+                  }
                 }}
                 aria-label="무드 삭제"
                 className="absolute top-1.5 right-1.5 w-8 h-8 bg-white/90 rounded-full text-gray-500 hover:text-red-600 hover:bg-white text-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-sm"

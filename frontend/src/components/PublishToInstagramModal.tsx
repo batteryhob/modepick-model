@@ -25,6 +25,7 @@ export function PublishToInstagramModal({
   const [caption, setCaption] = useState("");
   const [hashtagsText, setHashtagsText] = useState("");
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [target, setTarget] = useState<"feed" | "story">("feed");
 
   const { data: accounts = [] } = useQuery({
     queryKey: ["instagram-accounts"],
@@ -47,12 +48,20 @@ export function PublishToInstagramModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const isCarousel = feedPostIds.length > 1;
+  const isMulti = feedPostIds.length > 1;
+  const isStory = target === "story";
+  const isCarousel = target === "feed" && isMulti;
 
   const publishMutation = useMutation({
     mutationFn: async () => {
       if (!accountId) throw new Error("계정을 선택하세요");
       const hashtags = parseHashtags(hashtagsText);
+      if (isStory) {
+        return api.instagram.publishStories({
+          feed_post_ids: feedPostIds,
+          account_id: accountId,
+        });
+      }
       if (isCarousel) {
         return api.instagram.publishCarousel({
           feed_post_ids: feedPostIds,
@@ -69,7 +78,14 @@ export function PublishToInstagramModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["feed"] });
-      toast.success(isCarousel ? "캐러셀 발행 완료" : "인스타에 발행됨");
+      const msg = isStory
+        ? isMulti
+          ? `스토리 ${feedPostIds.length}개 발행됨`
+          : "스토리 발행됨"
+        : isCarousel
+          ? "캐러셀 발행 완료"
+          : "인스타에 발행됨";
+      toast.success(msg);
       onPublished();
     },
     onError: (err: Error) =>
@@ -105,9 +121,13 @@ export function PublishToInstagramModal({
     <ModalShell onClose={onClose}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold">
-          {isCarousel
-            ? `Instagram 캐러셀 발행 (${feedPostIds.length}장)`
-            : "Instagram 발행"}
+          {isStory
+            ? isMulti
+              ? `Instagram 스토리 발행 (${feedPostIds.length}장)`
+              : "Instagram 스토리 발행"
+            : isCarousel
+              ? `Instagram 캐러셀 발행 (${feedPostIds.length}장)`
+              : "Instagram 발행"}
         </h3>
         <button
           onClick={onClose}
@@ -115,6 +135,33 @@ export function PublishToInstagramModal({
           className="w-8 h-8 rounded-md hover:bg-gray-100 text-lg"
         >
           ×
+        </button>
+      </div>
+
+      <div className="flex gap-1 mb-3 p-0.5 bg-gray-100 rounded-md">
+        <button
+          type="button"
+          onClick={() => setTarget("feed")}
+          disabled={publishMutation.isPending}
+          className={`flex-1 px-3 py-1.5 text-sm rounded ${
+            target === "feed"
+              ? "bg-white shadow-sm font-medium"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          피드 {isMulti && "(캐러셀)"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTarget("story")}
+          disabled={publishMutation.isPending}
+          className={`flex-1 px-3 py-1.5 text-sm rounded ${
+            target === "story"
+              ? "bg-white shadow-sm font-medium"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          스토리 {isMulti && `(${feedPostIds.length}개 순차)`}
         </button>
       </div>
 
@@ -151,42 +198,53 @@ export function PublishToInstagramModal({
           </select>
         </div>
 
-        <div>
-          <label className="text-xs font-mono text-gray-400 block mb-1">
-            캡션{isCarousel && " (캐러셀 전체에 적용)"}
-          </label>
-          <textarea
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            placeholder="인스타그램 캡션을 입력하세요..."
-            rows={4}
-            disabled={publishMutation.isPending}
-            className="w-full text-sm border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-          />
-        </div>
+        {isStory ? (
+          <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-2 py-2">
+            스토리는 캡션 / 해시태그를 지원하지 않습니다 (Graph API 제한).
+            텍스트 오버레이는 인스타 앱에서 게시 후 편집해야 합니다.
+            {isMulti &&
+              ` ${feedPostIds.length}장을 순서대로 ${feedPostIds.length}개의 개별 스토리로 게시합니다.`}
+          </p>
+        ) : (
+          <>
+            <div>
+              <label className="text-xs font-mono text-gray-400 block mb-1">
+                캡션{isCarousel && " (캐러셀 전체에 적용)"}
+              </label>
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="인스타그램 캡션을 입력하세요..."
+                rows={4}
+                disabled={publishMutation.isPending}
+                className="w-full text-sm border rounded-md px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
+              />
+            </div>
 
-        <div>
-          <label className="text-xs font-mono text-gray-400 block mb-1">
-            해시태그 (쉼표 또는 공백 구분, 최대 30개)
-          </label>
-          <input
-            value={hashtagsText}
-            onChange={(e) => setHashtagsText(e.target.value)}
-            placeholder="ootd, fashion, seoul"
-            disabled={publishMutation.isPending}
-            className="w-full text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
-          />
-          {hashtagsText.trim() && (
-            <p className="text-[10px] text-gray-400 mt-1">
-              {parseHashtags(hashtagsText).length}개 해시태그
+            <div>
+              <label className="text-xs font-mono text-gray-400 block mb-1">
+                해시태그 (쉼표 또는 공백 구분, 최대 30개)
+              </label>
+              <input
+                value={hashtagsText}
+                onChange={(e) => setHashtagsText(e.target.value)}
+                placeholder="ootd, fashion, seoul"
+                disabled={publishMutation.isPending}
+                className="w-full text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              />
+              {hashtagsText.trim() && (
+                <p className="text-[10px] text-gray-400 mt-1">
+                  {parseHashtags(hashtagsText).length}개 해시태그
+                </p>
+              )}
+            </div>
+
+            <p className="text-[11px] text-gray-400">
+              입력한 캡션 / 해시태그는 저장되지 않고 발행 시점에만 인스타로
+              전송됩니다.
             </p>
-          )}
-        </div>
-
-        <p className="text-[11px] text-gray-400">
-          입력한 캡션 / 해시태그는 저장되지 않고 발행 시점에만 인스타로
-          전송됩니다.
-        </p>
+          </>
+        )}
       </div>
 
       <div className="flex justify-end gap-2 mt-5">
@@ -204,9 +262,13 @@ export function PublishToInstagramModal({
         >
           {publishMutation.isPending
             ? "발행 중..."
-            : isCarousel
-              ? "캐러셀 발행"
-              : "발행"}
+            : isStory
+              ? isMulti
+                ? `스토리 ${feedPostIds.length}개 발행`
+                : "스토리 발행"
+              : isCarousel
+                ? "캐러셀 발행"
+                : "발행"}
         </button>
       </div>
     </ModalShell>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import { api, imageUrl } from "@/api/client";
 import PageHeader from "@/components/PageHeader";
+import { useConfirm } from "@/components/Confirm";
 import type { WardrobeCategory, WardrobeItem, WardrobeItemImage } from "@/types";
 
 const CATEGORIES: { value: WardrobeCategory | "all"; label: string }[] = [
@@ -20,6 +21,7 @@ const MAX_IMAGES_PER_ITEM = 8;
 
 export default function WardrobePage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -210,8 +212,13 @@ export default function WardrobePage() {
           onRemoveImage={(imageRecordId) =>
             removeImageMutation.mutate({ itemId: detailItem.id, imageRecordId })
           }
-          onDelete={() => {
-            if (confirm(`"${detailItem.name}" 를 삭제하시겠습니까?`)) {
+          onDelete={async () => {
+            if (
+              await confirm({
+                message: `"${detailItem.name}" 를 삭제하시겠습니까?`,
+                destructive: true,
+              })
+            ) {
               deleteMutation.mutate(detailItem.id);
             }
           }}
@@ -261,6 +268,7 @@ function ItemDetailModal({
   isAdding,
   isRemoving,
 }: ItemDetailModalProps) {
+  const confirm = useConfirm();
   const atMax = item.images.length >= MAX_IMAGES_PER_ITEM;
 
   return (
@@ -322,8 +330,13 @@ function ItemDetailModal({
                 {item.images.length > 1 && (
                   <button
                     aria-label="이미지 삭제"
-                    onClick={() => {
-                      if (confirm("이 이미지를 삭제하시겠습니까?")) {
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          message: "이 이미지를 삭제하시겠습니까?",
+                          destructive: true,
+                        })
+                      ) {
                         onRemoveImage(img.id);
                       }
                     }}

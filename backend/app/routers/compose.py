@@ -1,7 +1,12 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services.compose import enqueue_compose_look, estimate_cost, run_compose_job
+from app.services.compose import (
+    enqueue_compose_look,
+    enqueue_compose_mood_shot,
+    estimate_cost,
+    run_compose_job,
+)
 
 router = APIRouter(prefix="/api", tags=["compose"])
 
@@ -59,3 +64,42 @@ def compose(req: ComposeRequest, background_tasks: BackgroundTasks):
 @router.get("/compose/estimate")
 def cost_estimate(provider: str = "openai", quality: str = "medium", ref_count: int = 6):
     return {"cost_estimate_usd": estimate_cost(provider, quality, ref_count)}
+
+
+class ComposeMoodRequest(BaseModel):
+    """Generate a character-less ambient / still-life feed image.
+
+    Unlike /compose, there are no wardrobe slots, no view / capture /
+    weather knobs, and no character references — the persona's world is
+    expressed through the optional location + mood references plus the
+    free-form scene prompt. character_id is kept because every FeedPost
+    is owned by a persona (it's their feed).
+    """
+
+    character_id: str
+    scene: str = ""
+    location_id: str | None = None
+    mood_id: str | None = None
+    provider: str = "openai"
+    quality: str = "medium"
+    count: int = Field(default=1, ge=1, le=4)
+
+
+@router.post("/compose-mood", status_code=202)
+def compose_mood(req: ComposeMoodRequest, background_tasks: BackgroundTasks):
+    try:
+        job_id = enqueue_compose_mood_shot(
+            character_id=req.character_id,
+            scene=req.scene,
+            location_id=req.location_id,
+            mood_id=req.mood_id,
+            provider_name=req.provider,
+            quality=req.quality,
+            count=req.count,
+        )
+        background_tasks.add_task(run_compose_job, job_id)
+        return {"job_id": job_id, "status": "pending"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Generation failed: {e}")

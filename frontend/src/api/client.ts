@@ -123,6 +123,13 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  composeMood: (data: ComposeMoodRequest) =>
+    request<ComposeResponse>("/api/compose-mood", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+
   feed: {
     list: (limit = 27, offset = 0) =>
       request<{ posts: FeedPost[]; total: number }>(`/api/feed?limit=${limit}&offset=${offset}`),
@@ -200,6 +207,18 @@ export const api = {
           body: JSON.stringify(payload),
         },
       ),
+    publishStories: (payload: {
+      feed_post_ids: string[];
+      account_id: string;
+    }) =>
+      request<{
+        published: { feed_post_id: string; ig_media_id: string }[];
+        count: number;
+      }>("/api/instagram/publish-stories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }),
   },
 };
 
@@ -214,6 +233,7 @@ import type {
   GenerationJob,
   ComposeRequest,
   ComposeResponse,
+  ComposeMoodRequest,
   CharacterCreateResponse,
   CharacterCreateRequest,
   InstagramAccount,
