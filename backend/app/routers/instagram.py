@@ -1,18 +1,16 @@
 """Account management + publish endpoints for connected Instagram accounts."""
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, HTTPException
 from sqlmodel import Session, select
 
 from app.database import engine
-from app.models import FeedPost, InstagramAccount, utcnow
+from app.models import InstagramAccount, utcnow
 from app.services.instagram import (
     InstagramError,
-    publish_carousel,
-    publish_feed_post,
-    publish_story,
-    refresh_token_if_needed,
+    _MissingResource,
+    publish_carousel_by_ids,
+    publish_feed_post_by_id,
+    publish_stories_by_ids,
 )
 
 router = APIRouter(prefix="/api/instagram", tags=["instagram"])
@@ -65,6 +63,13 @@ def update_account_label(account_id: str, body: dict):
         return _account_to_dict(account)
 
 
+def _ig_error_to_http(e: InstagramError) -> HTTPException:
+    detail = str(e)
+    if e.body:
+        detail += f"\n\nResponse: {e.body[:500]}"
+    return HTTPException(502, detail)
+
+
 @router.post("/publish/{feed_post_id}")
 async def publish_post(feed_post_id: str, body: dict):
     """Publish a single FeedPost. Caption + hashtags are passed inline
@@ -76,55 +81,18 @@ async def publish_post(feed_post_id: str, body: dict):
     account_id = body.get("account_id")
     if not account_id:
         raise HTTPException(400, "Missing account_id")
-    caption_text = body.get("caption") or None
-    hashtags = body.get("hashtags") or []
-
-    with Session(engine) as session:
-        post = session.get(FeedPost, feed_post_id)
-        if not post:
-            raise HTTPException(404, "Feed post not found")
-        # Re-publishing is allowed — IG treats each call as a new media
-        # creation, and the user's mental model is "image is reusable".
-        # We just overwrite ig_media_id with the latest one.
-        account = session.get(InstagramAccount, account_id)
-        if not account:
-            raise HTTPException(404, "Instagram account not found")
-        post_copy = FeedPost(**post.model_dump())
 
     try:
-        await refresh_token_if_needed(account)
-    except InstagramError:
-        pass  # fall through; publish call will surface a clearer error
-
-    try:
-        with Session(engine) as session:
-            fresh = session.get(InstagramAccount, account_id)
-            if not fresh:
-                raise HTTPException(404, "Account vanished mid-publish")
-            ig_media_id = await publish_feed_post(
-                post_copy, fresh, caption_text, hashtags
-            )
-
-        with Session(engine) as session:
-            post = session.get(FeedPost, feed_post_id)
-            if not post:
-                raise HTTPException(404, "Feed post vanished mid-publish")
-            post.ig_media_id = ig_media_id
-            post.ig_account_id = account_id
-            post.posted_at = datetime.now(timezone.utc)
-            session.add(post)
-            session.commit()
-
-        return {
-            "ig_media_id": ig_media_id,
-            "posted_at": datetime.now(timezone.utc),
-        }
-
+        return await publish_feed_post_by_id(
+            feed_post_id,
+            account_id,
+            body.get("caption") or None,
+            body.get("hashtags") or [],
+        )
+    except _MissingResource as e:
+        raise HTTPException(404, str(e))
     except InstagramError as e:
-        detail = str(e)
-        if e.body:
-            detail += f"\n\nResponse: {e.body[:500]}"
-        raise HTTPException(502, detail)
+        raise _ig_error_to_http(e)
 
 
 @router.post("/publish-carousel")
@@ -137,68 +105,23 @@ async def publish_carousel_endpoint(body: dict):
     All FeedPosts in the batch get the same resulting ig_media_id, so
     the feed grid will mark each one as "published as part of a carousel".
     """
-    feed_post_ids: list[str] = body.get("feed_post_ids") or []
     account_id = body.get("account_id")
-    caption_text = body.get("caption") or None
-    hashtags = body.get("hashtags") or []
-
     if not account_id:
         raise HTTPException(400, "Missing account_id")
-    if len(feed_post_ids) < 2 or len(feed_post_ids) > 10:
-        raise HTTPException(
-            400, "feed_post_ids must have 2–10 entries for a carousel"
+
+    try:
+        return await publish_carousel_by_ids(
+            body.get("feed_post_ids") or [],
+            account_id,
+            body.get("caption") or None,
+            body.get("hashtags") or [],
         )
-
-    with Session(engine) as session:
-        posts: list[FeedPost] = []
-        for fpid in feed_post_ids:
-            p = session.get(FeedPost, fpid)
-            if not p:
-                raise HTTPException(404, f"Feed post {fpid} not found")
-            # No de-duplication: re-publishing previously-published posts
-            # is intentional. Each call overwrites the recorded ig_media_id
-            # with the latest one.
-            posts.append(p)
-
-        account = session.get(InstagramAccount, account_id)
-        if not account:
-            raise HTTPException(404, "Instagram account not found")
-        # Detach so the async call doesn't hold the session.
-        post_copies = [FeedPost(**p.model_dump()) for p in posts]
-
-    try:
-        await refresh_token_if_needed(account)
-    except InstagramError:
-        pass
-
-    try:
-        with Session(engine) as session:
-            fresh = session.get(InstagramAccount, account_id)
-            if not fresh:
-                raise HTTPException(404, "Account vanished mid-publish")
-            ig_media_id = await publish_carousel(
-                post_copies, fresh, caption_text, hashtags
-            )
-
-        now = datetime.now(timezone.utc)
-        with Session(engine) as session:
-            for fpid in feed_post_ids:
-                post = session.get(FeedPost, fpid)
-                if not post:
-                    continue
-                post.ig_media_id = ig_media_id
-                post.ig_account_id = account_id
-                post.posted_at = now
-                session.add(post)
-            session.commit()
-
-        return {"ig_media_id": ig_media_id, "posted_at": now, "count": len(feed_post_ids)}
-
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except _MissingResource as e:
+        raise HTTPException(404, str(e))
     except InstagramError as e:
-        detail = str(e)
-        if e.body:
-            detail += f"\n\nResponse: {e.body[:500]}"
-        raise HTTPException(502, detail)
+        raise _ig_error_to_http(e)
 
 
 @router.post("/publish-stories")
@@ -216,64 +139,18 @@ async def publish_stories_endpoint(body: dict):
     if the 3rd story fails, the first two are already saved with their
     ig_media_ids. The error response notes how many succeeded.
     """
-    feed_post_ids: list[str] = body.get("feed_post_ids") or []
     account_id = body.get("account_id")
-
     if not account_id:
         raise HTTPException(400, "Missing account_id")
-    if not feed_post_ids:
-        raise HTTPException(400, "feed_post_ids must not be empty")
-    if len(feed_post_ids) > 10:
-        raise HTTPException(
-            400, f"feed_post_ids accepts up to 10 stories, got {len(feed_post_ids)}"
+
+    try:
+        return await publish_stories_by_ids(
+            body.get("feed_post_ids") or [],
+            account_id,
         )
-
-    with Session(engine) as session:
-        post_copies: list[FeedPost] = []
-        for fpid in feed_post_ids:
-            p = session.get(FeedPost, fpid)
-            if not p:
-                raise HTTPException(404, f"Feed post {fpid} not found")
-            post_copies.append(FeedPost(**p.model_dump()))
-        account = session.get(InstagramAccount, account_id)
-        if not account:
-            raise HTTPException(404, "Instagram account not found")
-
-    try:
-        await refresh_token_if_needed(account)
-    except InstagramError:
-        pass
-
-    published: list[dict] = []
-    try:
-        for idx, post_copy in enumerate(post_copies):
-            fpid = feed_post_ids[idx]
-            with Session(engine) as session:
-                fresh = session.get(InstagramAccount, account_id)
-                if not fresh:
-                    raise HTTPException(404, "Account vanished mid-publish")
-                ig_media_id = await publish_story(post_copy, fresh)
-
-            now = datetime.now(timezone.utc)
-            with Session(engine) as session:
-                post = session.get(FeedPost, fpid)
-                if post:
-                    post.ig_media_id = ig_media_id
-                    post.ig_account_id = account_id
-                    post.posted_at = now
-                    session.add(post)
-                    session.commit()
-            published.append({"feed_post_id": fpid, "ig_media_id": ig_media_id})
-
-        return {"published": published, "count": len(published)}
-
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except _MissingResource as e:
+        raise HTTPException(404, str(e))
     except InstagramError as e:
-        detail = str(e)
-        if e.body:
-            detail += f"\n\nResponse: {e.body[:500]}"
-        if published:
-            detail += (
-                f"\n\n{len(published)} of {len(post_copies)} stories published "
-                "before failure; already saved."
-            )
-        raise HTTPException(502, detail)
+        raise _ig_error_to_http(e)

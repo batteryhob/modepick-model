@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ModePick MCP — Connector & Tool Reference</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --fg: #1c1b18;
+    --muted: #6b6862;
+    --accent: #b85c38;
+    --code-bg: #efece6;
+    --border: #e3dfd7;
+    --warn-bg: #fdf1ec;
+    --warn-border: #e2a487;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+      "Helvetica Neue", "Pretendard", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+  h1 {
+    font-size: 28px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  h1 .sub {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 17px;
+    margin-left: 8px;
+  }
+  h2 {
+    font-size: 19px;
+    margin: 48px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.005em;
+  }
+  h3 {
+    font-size: 15px;
+    margin: 28px 0 8px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  p, li {
+    color: var(--fg);
+  }
+  code {
+    font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  pre code { background: transparent; padding: 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin-bottom: 4px; }
+  .lede {
+    color: var(--muted);
+    font-size: 16px;
+    margin: 8px 0 32px;
+  }
+  .callout {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .callout strong { color: var(--accent); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  td code { font-size: 12.5px; }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .tag.read { background: #e5efe6; color: #2d6a3c; }
+  .tag.write { background: #fdecec; color: #a13434; }
+  .tag.compose { background: #ece4f7; color: #5a3a99; }
+  footer {
+    margin-top: 64px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ModePick MCP <span class="sub">Connector &amp; Tool Reference</span></h1>
+<p class="lede">
+  로컬 백엔드가 떠 있는 동안 같이 떠 있는 MCP 서버. Claude Desktop /
+  Codex 같은 에이전트가 붙어서 페르소나 리소스를 읽고, 합성 작업을
+  돌리고, 인스타그램에 게시한다.
+</p>
+
+<h2>핵심 아이디어</h2>
+<ul>
+  <li>FastAPI 백엔드와 같은 프로세스, 같은 lifecycle. 백엔드 죽으면 MCP 도 같이 죽음.</li>
+  <li>Transport: Streamable HTTP (stateless). 별도 데몬·인증·토큰 없이 로컬에서만 접근.</li>
+  <li>리소스 생성은 사람이 직접 함 (UI). 에이전트는 <em>조합·기획·실행</em>만 한다.</li>
+  <li>모든 게시 도구는 <code>destructiveHint</code> 가 붙어있어서 잘 만든 클라이언트는 자동 승인 안 함 — 사람 확인 후 실행.</li>
+</ul>
+
+<h2>붙이는 법</h2>
+
+<h3>1. 백엔드 띄우기</h3>
+<pre><code>cd backend
+uv run uvicorn app.main:app --reload</code></pre>
+<p>기본 포트 <code>8000</code>. MCP 는 <code>http://127.0.0.1:8000/mcp</code> 에 떠 있다.</p>
+
+<h3>2. Claude Desktop</h3>
+<ol>
+  <li>Settings → Connectors → <strong>Add custom connector</strong></li>
+  <li>Name: <code>modepick</code></li>
+  <li>URL: <code>http://127.0.0.1:8000/mcp</code></li>
+  <li>인증 없음 (로컬 전용)</li>
+</ol>
+
+<h3>3. Codex CLI</h3>
+<p><code>~/.codex/config.toml</code> 에 추가:</p>
+<pre><code>[mcp_servers.modepick]
+url = "http://127.0.0.1:8000/mcp"</code></pre>
+<p>
+  Codex 버전이 HTTP MCP 미지원이면 stdio 브리지를 끼운다:
+</p>
+<pre><code>[mcp_servers.modepick]
+command = "npx"
+args = ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp"]</code></pre>
+
+<div class="callout">
+  <strong>주의.</strong> 백엔드가 떠 있어야 MCP 도 떠 있다. 에이전트가
+  "서버에 못 붙는다" 고 하면 먼저 <code>uvicorn</code> 이 살아있는지
+  확인.
+</div>
+
+<h2>권장 워크플로우</h2>
+<ol>
+  <li>
+    <strong>탐색</strong> — <code>list_characters</code>,
+    <code>list_wardrobe</code>, <code>list_world_locations</code>,
+    <code>list_moods</code> 호출해서 라이브러리 파악. 각 항목의
+    <code>persona</code> / <code>notes</code> / <code>tags</code> 필드를
+    읽고 어떤 조합이 어울릴지 판단.
+  </li>
+  <li>
+    <strong>제안 → 승인</strong> — 사람한테 "이 조합으로 가도 되냐"
+    물어보고 OK 를 받은 다음에야 compose 호출.
+  </li>
+  <li>
+    <strong>합성</strong> — <code>compose_look</code>
+    (인물컷) 또는 <code>compose_mood</code> (사람 없는 무드컷) 호출
+    → <code>job_id</code> 받음 → <code>get_compose_job</code> 로 폴링.
+  </li>
+  <li>
+    <strong>확인</strong> — <code>status == "success"</code> 되면
+    <code>list_feed_posts(limit=10)</code> 로 새 포스트 찾기. 사람한테
+    이미지 확인받기.
+  </li>
+  <li>
+    <strong>게시</strong> — 승인 후 <code>publish_single</code> /
+    <code>publish_carousel</code> / <code>publish_stories</code> 호출.
+  </li>
+</ol>
+
+<div class="callout">
+  앞으로 리소스 (캐릭터/옷/세계관/무드) 만들 때 <em>설명을 꼭 채워두기</em>.
+  에이전트가 이걸 읽고 판단하기 때문에 비어있으면 좋은 조합을 못 만든다.
+</div>
+
+<h2>도구 목록</h2>
+
+<h3>읽기 — Read</h3>
+<table>
+  <thead>
+    <tr><th style="width: 28%">Tool</th><th>설명</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>list_characters</code><span class="tag read">read</span></td>
+      <td>모든 페르소나. <code>persona</code> dict (나이/스타일/외모 등) 포함.</td>
+    </tr>
+    <tr>
+      <td><code>list_wardrobe</code><span class="tag read">read</span></td>
+      <td>옷 항목. <code>category</code> 로 필터링 가능 (hat, top, bottom, outerwear, dress, bag, shoes).</td>
+    </tr>
+    <tr>
+      <td><code>list_world_locations</code><span class="tag read">read</span></td>
+      <td>세계관 장소 (집/카페/거리 등). <code>notes</code> 로 묘사.</td>
+    </tr>
+    <tr>
+      <td><code>list_moods</code><span class="tag read">read</span></td>
+      <td>무드/조명 레퍼런스. <code>tags</code> 는 콤마 구분 자유 텍스트.</td>
+    </tr>
+    <tr>
+      <td><code>list_instagram_accounts</code><span class="tag read">read</span></td>
+      <td>게시 가능한 IG 계정 목록 (게시할 때 <code>account_id</code> 가 필요).</td>
+    </tr>
+    <tr>
+      <td><code>list_feed_posts</code><span class="tag read">read</span></td>
+      <td>생성된 피드 포스트 (최신순). <code>only_unposted=true</code> 로 미게시 드래프트만 조회.</td>
+    </tr>
+    <tr>
+      <td><code>get_compose_job</code><span class="tag read">read</span></td>
+      <td>합성 작업 상태 폴링. <code>status</code>: pending / success / failed / missing.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>합성 — Compose</h3>
+<table>
+  <thead>
+    <tr><th style="width: 28%">Tool</th><th>설명</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>compose_look</code><span class="tag compose">compose</span></td>
+      <td>
+        페르소나가 옷 입고 장면에 등장하는 인물컷.<br>
+        주요 인자: <code>character_id</code>,
+        <code>wardrobe_slots</code> (slot→item_id dict),
+        <code>location_id</code>, <code>mood_id</code>, <code>scene</code>,
+        <code>count</code> (1–4).<br>
+        반환: <code>{job_id, status: "pending"}</code> — 폴링 필요.
+      </td>
+    </tr>
+    <tr>
+      <td><code>compose_mood</code><span class="tag compose">compose</span></td>
+      <td>
+        사람 없이 페르소나의 세계관을 보여주는 무드컷 (테이블 위 커피, 창가 디테일, 빈 거리 등).<br>
+        주요 인자: <code>character_id</code>, <code>location_id</code>,
+        <code>mood_id</code>, <code>scene</code>, <code>count</code>.<br>
+        반환: <code>{job_id, status: "pending"}</code>.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>게시 — Publish (destructive)</h3>
+<table>
+  <thead>
+    <tr><th style="width: 28%">Tool</th><th>설명</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>publish_single</code><span class="tag write">destructive</span></td>
+      <td>피드 포스트 1개를 단일 이미지로 게시. <code>caption</code> / <code>hashtags</code> 인라인.</td>
+    </tr>
+    <tr>
+      <td><code>publish_carousel</code><span class="tag write">destructive</span></td>
+      <td>피드 포스트 2–10개를 1개의 IG 캐러셀로 게시 (같은 캡션).</td>
+    </tr>
+    <tr>
+      <td><code>publish_stories</code><span class="tag write">destructive</span></td>
+      <td>피드 포스트 1–10개를 순차 스토리로 게시 (캡션/해시태그 없음). 부분 실패해도 이미 올라간 건 보존.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>대화 예시</h2>
+<p>에이전트가 사람한테 던지는 전형적인 흐름:</p>
+<pre><code>너: "오늘 카페 무드로 피드 3장 짜줘"
+
+에이전트: [list_characters, list_world_locations, list_moods 호출]
+"활성 페르소나는 'Asakura Non' 이고, 카페 장소 'Morning Brew' 와
+무드 'warm, golden hour, soft' 가 어울려보여요. 다음 조합 어때요?
+  1. 인물컷: Non + 베이지 코트 + 카페 + 골든아워 무드
+  2. 무드컷: 카페 테이블 위 라떼 + 같은 무드
+  3. 무드컷: 카페 창가 빛 + 같은 무드
+이대로 갈까요?"
+
+너: "응"
+
+에이전트: [compose_look + compose_mood × 2 호출 → 3개 job_id]
+"세 작업 시작. 폴링 중..."
+
+[get_compose_job × N 호출]
+"세 개 다 success. list_feed_posts 로 결과 확인할게요."
+
+[list_feed_posts(limit=10) 호출]
+"3장 다 나왔어요. 어떤 형식으로 올릴까요? (단일 3개 / 캐러셀 1개 / 스토리 3개)"
+
+너: "캐러셀로"
+
+에이전트: "publish_carousel 호출하기 전에 마지막 확인: 어느 계정,
+어떤 캡션으로 갈까요?"
+...</code></pre>
+
+<footer>
+  <code>backend/app/mcp_server.py</code> — FastMCP 서버 정의<br>
+  <code>backend/app/main.py</code> — <code>/mcp</code> 마운트 + lifespan<br>
+  Streamable HTTP transport · mcp Python SDK ≥ 1.2.0
+</footer>
+
+</main>
+</body>
+</html>

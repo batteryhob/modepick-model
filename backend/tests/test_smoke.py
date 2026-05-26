@@ -40,6 +40,37 @@ def test_known_routes_registered():
         assert required in paths, f"missing route: {required}"
 
 
+def test_mcp_server_mounted():
+    # The MCP sub-app is mounted at /mcp. Its single Streamable HTTP
+    # route appears as a Mount on the parent app's route table.
+    mounts = [r for r in app.routes if getattr(r, "path", "") == "/mcp"]
+    assert mounts, "MCP sub-app is not mounted at /mcp"
+
+
+def test_mcp_tools_registered():
+    # Catch accidental deletion / rename of any MCP tool — these are
+    # the public surface area agents call.
+    import asyncio
+    from app.mcp_server import mcp
+
+    tool_names = {t.name for t in asyncio.run(mcp.list_tools())}
+    for required in (
+        "list_characters",
+        "list_wardrobe",
+        "list_world_locations",
+        "list_moods",
+        "list_instagram_accounts",
+        "list_feed_posts",
+        "get_compose_job",
+        "compose_look",
+        "compose_mood",
+        "publish_single",
+        "publish_carousel",
+        "publish_stories",
+    ):
+        assert required in tool_names, f"missing MCP tool: {required}"
+
+
 def test_feed_list_empty_db():
     with TestClient(app) as client:
         r = client.get("/api/feed")

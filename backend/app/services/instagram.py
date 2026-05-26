@@ -537,3 +537,167 @@ def _compose_caption(caption: Optional[str], hashtags: Optional[list]) -> str:
     if body and tag_line:
         return f"{body}\n\n{tag_line}"
     return body or tag_line
+
+
+# --- Orchestration helpers -------------------------------------------------
+# These wrap "look up FeedPost + Account, call the Graph API, write the result
+# back" so both the HTTP router and the MCP tool layer can reuse them. They
+# raise InstagramError / LookupError; callers map those to their own response
+# shape (HTTPException vs. MCP error dict).
+
+
+class _MissingResource(LookupError):
+    """Raised when a feed post or IG account id doesn't exist."""
+
+
+async def publish_feed_post_by_id(
+    feed_post_id: str,
+    account_id: str,
+    caption: Optional[str] = None,
+    hashtags: Optional[list[str]] = None,
+) -> dict:
+    """Look up the post + account, publish to IG, stamp ig_media_id."""
+    with Session(engine) as session:
+        post = session.get(FeedPost, feed_post_id)
+        if not post:
+            raise _MissingResource(f"Feed post {feed_post_id} not found")
+        account = session.get(InstagramAccount, account_id)
+        if not account:
+            raise _MissingResource(f"Instagram account {account_id} not found")
+        post_copy = FeedPost(**post.model_dump())
+
+    try:
+        await refresh_token_if_needed(account)
+    except InstagramError:
+        pass  # publish call will surface the clearer error
+
+    with Session(engine) as session:
+        fresh = session.get(InstagramAccount, account_id)
+        if not fresh:
+            raise _MissingResource("Account vanished mid-publish")
+        ig_media_id = await publish_feed_post(post_copy, fresh, caption, hashtags)
+
+    posted_at = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        post = session.get(FeedPost, feed_post_id)
+        if post:
+            post.ig_media_id = ig_media_id
+            post.ig_account_id = account_id
+            post.posted_at = posted_at
+            session.add(post)
+            session.commit()
+
+    return {"ig_media_id": ig_media_id, "posted_at": posted_at}
+
+
+async def publish_carousel_by_ids(
+    feed_post_ids: list[str],
+    account_id: str,
+    caption: Optional[str] = None,
+    hashtags: Optional[list[str]] = None,
+) -> dict:
+    if len(feed_post_ids) < 2 or len(feed_post_ids) > 10:
+        raise ValueError("feed_post_ids must have 2–10 entries for a carousel")
+
+    with Session(engine) as session:
+        post_copies: list[FeedPost] = []
+        for fpid in feed_post_ids:
+            p = session.get(FeedPost, fpid)
+            if not p:
+                raise _MissingResource(f"Feed post {fpid} not found")
+            post_copies.append(FeedPost(**p.model_dump()))
+        account = session.get(InstagramAccount, account_id)
+        if not account:
+            raise _MissingResource(f"Instagram account {account_id} not found")
+
+    try:
+        await refresh_token_if_needed(account)
+    except InstagramError:
+        pass
+
+    with Session(engine) as session:
+        fresh = session.get(InstagramAccount, account_id)
+        if not fresh:
+            raise _MissingResource("Account vanished mid-publish")
+        ig_media_id = await publish_carousel(post_copies, fresh, caption, hashtags)
+
+    posted_at = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        for fpid in feed_post_ids:
+            post = session.get(FeedPost, fpid)
+            if not post:
+                continue
+            post.ig_media_id = ig_media_id
+            post.ig_account_id = account_id
+            post.posted_at = posted_at
+            session.add(post)
+        session.commit()
+
+    return {
+        "ig_media_id": ig_media_id,
+        "posted_at": posted_at,
+        "count": len(feed_post_ids),
+    }
+
+
+async def publish_stories_by_ids(
+    feed_post_ids: list[str],
+    account_id: str,
+) -> dict:
+    """Sequential per-story publish — commit individually so partial
+    failures don't lose the ones that already posted."""
+    if not feed_post_ids:
+        raise ValueError("feed_post_ids must not be empty")
+    if len(feed_post_ids) > 10:
+        raise ValueError(
+            f"feed_post_ids accepts up to 10 stories, got {len(feed_post_ids)}"
+        )
+
+    with Session(engine) as session:
+        post_copies: list[FeedPost] = []
+        for fpid in feed_post_ids:
+            p = session.get(FeedPost, fpid)
+            if not p:
+                raise _MissingResource(f"Feed post {fpid} not found")
+            post_copies.append(FeedPost(**p.model_dump()))
+        account = session.get(InstagramAccount, account_id)
+        if not account:
+            raise _MissingResource(f"Instagram account {account_id} not found")
+
+    try:
+        await refresh_token_if_needed(account)
+    except InstagramError:
+        pass
+
+    published: list[dict] = []
+    try:
+        for idx, post_copy in enumerate(post_copies):
+            fpid = feed_post_ids[idx]
+            with Session(engine) as session:
+                fresh = session.get(InstagramAccount, account_id)
+                if not fresh:
+                    raise _MissingResource("Account vanished mid-publish")
+                ig_media_id = await publish_story(post_copy, fresh)
+
+            now = datetime.now(timezone.utc)
+            with Session(engine) as session:
+                post = session.get(FeedPost, fpid)
+                if post:
+                    post.ig_media_id = ig_media_id
+                    post.ig_account_id = account_id
+                    post.posted_at = now
+                    session.add(post)
+                    session.commit()
+            published.append({"feed_post_id": fpid, "ig_media_id": ig_media_id})
+
+    except InstagramError as e:
+        # Attach progress info so the caller can tell the user what landed.
+        e.body = (e.body or "") + (
+            f"\n\n{len(published)} of {len(post_copies)} stories published "
+            "before failure; already saved."
+            if published
+            else ""
+        )
+        raise
+
+    return {"published": published, "count": len(published)}
