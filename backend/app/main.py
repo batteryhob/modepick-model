@@ -32,7 +32,33 @@ logging.basicConfig(
 # Built once at import so we can both mount it AND keep a reference to
 # its lifespan (FastAPI doesn't propagate sub-app lifespans to mounted
 # routes, so we chain it into our own lifespan below).
-mcp_asgi_app = mcp_server.streamable_http_app()
+_mcp_inner_app = mcp_server.streamable_http_app()
+
+
+# Localhost-only guard for MCP. The MCP server has NO authentication —
+# any caller that can reach the URL can invoke compose / publish. If the
+# user runs uvicorn with --host 0.0.0.0 (also the default config), the
+# rest of the API needs to be LAN-reachable but MCP must not be. We
+# refuse any /mcp request whose ASGI client.host isn't loopback.
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+async def mcp_loopback_guard(scope, receive, send):
+    if scope["type"] in ("http", "websocket"):
+        client = scope.get("client")
+        host = client[0] if client else None
+        if host not in _LOOPBACK_HOSTS:
+            await send({
+                "type": "http.response.start",
+                "status": 403,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b'{"error":"mcp is restricted to localhost"}',
+            })
+            return
+    await _mcp_inner_app(scope, receive, send)
 
 
 @asynccontextmanager
@@ -91,5 +117,6 @@ app.include_router(instagram.router)
 
 # MCP server — local agents (Claude Desktop / Codex) connect to /mcp via
 # Streamable HTTP. Mounted as a sub-app so it shares the uvicorn process
-# and lifecycle: backend up = MCP up.
-app.mount("/mcp", mcp_asgi_app)
+# and lifecycle: backend up = MCP up. The loopback guard wraps the real
+# MCP ASGI app to reject any non-localhost caller (no MCP auth otherwise).
+app.mount("/mcp", mcp_loopback_guard)

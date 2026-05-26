@@ -44,7 +44,7 @@ from app.services.compose import (
 )
 from app.services.instagram import (
     InstagramError,
-    _MissingResource,
+    MissingResourceError,
     publish_carousel_by_ids,
     publish_feed_post_by_id,
     publish_stories_by_ids,
@@ -83,15 +83,20 @@ mcp = FastMCP(
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
-def list_characters() -> list[dict]:
-    """List all personas. Each entry includes the free-form `persona`
-    dict the user filled in (description, age, style, etc.) — read it
-    to decide which persona fits the post idea."""
+def list_characters(active_only: bool = False) -> list[dict]:
+    """List personas. Each entry includes the free-form `persona` dict
+    the user filled in (description, age, style, etc.) — read it to
+    decide which persona fits the post idea.
+
+    The user typically has ONE active persona at a time; that's the
+    one whose feed they're maintaining. When in doubt, pick the entry
+    with `is_active: true` — or call with active_only=true to get just
+    that one."""
     chars = svc_list_characters()
     # Strip references and base_image_id; an agent only needs identity
     # for picking. The compose tools use the persona's stored references
     # by default.
-    return [
+    result = [
         {
             "id": c["id"],
             "name": c["name"],
@@ -100,6 +105,9 @@ def list_characters() -> list[dict]:
         }
         for c in chars
     ]
+    if active_only:
+        result = [c for c in result if c["is_active"]]
+    return result
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -230,6 +238,36 @@ def get_compose_job(job_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# Bounds for count, mirroring the HTTP router's Pydantic Field(ge=1, le=4).
+# Each variant multiplies provider cost, so this is a hard agent-safety
+# clamp — if the agent asks for more we reject rather than silently cap.
+MAX_VARIANTS_PER_CALL = 4
+
+
+def _validate_count(count: int) -> Optional[dict]:
+    if not isinstance(count, int) or count < 1 or count > MAX_VARIANTS_PER_CALL:
+        return {
+            "error": "bad_request",
+            "message": (
+                f"count must be an integer 1–{MAX_VARIANTS_PER_CALL}; "
+                f"got {count!r}"
+            ),
+        }
+    return None
+
+
+# The event loop only keeps weak references to tasks created via
+# create_task. If we don't hold a strong reference, the compose job can
+# be garbage-collected mid-run. Pin them here and drop on completion.
+_pending_compose_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_compose_job(job_id: str) -> None:
+    task = asyncio.create_task(_run_job_safely(job_id))
+    _pending_compose_tasks.add(task)
+    task.add_done_callback(_pending_compose_tasks.discard)
+
+
 async def _run_job_safely(job_id: str) -> None:
     """Fire-and-forget wrapper around run_compose_job. The job persists
     its own success/failure state, so we just need to keep the task
@@ -274,6 +312,10 @@ def compose_look(
 
     count: 1–4 variants in one call. Higher counts multiply cost.
     """
+    bad = _validate_count(count)
+    if bad:
+        return bad
+
     slots = dict(wardrobe_slots or {})
     if location_id:
         slots["location"] = location_id
@@ -299,7 +341,7 @@ def compose_look(
     except ValueError as e:
         return {"error": "bad_request", "message": str(e)}
 
-    asyncio.create_task(_run_job_safely(job_id))
+    _spawn_compose_job(job_id)
     return {"job_id": job_id, "status": "pending"}
 
 
@@ -323,6 +365,10 @@ def compose_mood(
 
     Returns {job_id, status: 'pending'}; poll get_compose_job.
     """
+    bad = _validate_count(count)
+    if bad:
+        return bad
+
     try:
         job_id = enqueue_compose_mood_shot(
             character_id=character_id,
@@ -336,7 +382,7 @@ def compose_mood(
     except ValueError as e:
         return {"error": "bad_request", "message": str(e)}
 
-    asyncio.create_task(_run_job_safely(job_id))
+    _spawn_compose_job(job_id)
     return {"job_id": job_id, "status": "pending"}
 
 
@@ -366,7 +412,7 @@ async def publish_single(
         result = await publish_feed_post_by_id(
             feed_post_id, account_id, caption, hashtags
         )
-    except _MissingResource as e:
+    except MissingResourceError as e:
         return {"error": "not_found", "message": str(e)}
     except InstagramError as e:
         return _ig_error_dict(e)
@@ -393,7 +439,7 @@ async def publish_carousel(
         )
     except ValueError as e:
         return {"error": "bad_request", "message": str(e)}
-    except _MissingResource as e:
+    except MissingResourceError as e:
         return {"error": "not_found", "message": str(e)}
     except InstagramError as e:
         return _ig_error_dict(e)
@@ -419,7 +465,7 @@ async def publish_stories(
         result = await publish_stories_by_ids(feed_post_ids, account_id)
     except ValueError as e:
         return {"error": "bad_request", "message": str(e)}
-    except _MissingResource as e:
+    except MissingResourceError as e:
         return {"error": "not_found", "message": str(e)}
     except InstagramError as e:
         return _ig_error_dict(e)

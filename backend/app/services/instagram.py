@@ -546,7 +546,7 @@ def _compose_caption(caption: Optional[str], hashtags: Optional[list]) -> str:
 # shape (HTTPException vs. MCP error dict).
 
 
-class _MissingResource(LookupError):
+class MissingResourceError(LookupError):
     """Raised when a feed post or IG account id doesn't exist."""
 
 
@@ -560,10 +560,10 @@ async def publish_feed_post_by_id(
     with Session(engine) as session:
         post = session.get(FeedPost, feed_post_id)
         if not post:
-            raise _MissingResource(f"Feed post {feed_post_id} not found")
+            raise MissingResourceError(f"Feed post {feed_post_id} not found")
         account = session.get(InstagramAccount, account_id)
         if not account:
-            raise _MissingResource(f"Instagram account {account_id} not found")
+            raise MissingResourceError(f"Instagram account {account_id} not found")
         post_copy = FeedPost(**post.model_dump())
 
     try:
@@ -574,7 +574,7 @@ async def publish_feed_post_by_id(
     with Session(engine) as session:
         fresh = session.get(InstagramAccount, account_id)
         if not fresh:
-            raise _MissingResource("Account vanished mid-publish")
+            raise MissingResourceError("Account vanished mid-publish")
         ig_media_id = await publish_feed_post(post_copy, fresh, caption, hashtags)
 
     posted_at = datetime.now(timezone.utc)
@@ -604,11 +604,11 @@ async def publish_carousel_by_ids(
         for fpid in feed_post_ids:
             p = session.get(FeedPost, fpid)
             if not p:
-                raise _MissingResource(f"Feed post {fpid} not found")
+                raise MissingResourceError(f"Feed post {fpid} not found")
             post_copies.append(FeedPost(**p.model_dump()))
         account = session.get(InstagramAccount, account_id)
         if not account:
-            raise _MissingResource(f"Instagram account {account_id} not found")
+            raise MissingResourceError(f"Instagram account {account_id} not found")
 
     try:
         await refresh_token_if_needed(account)
@@ -618,7 +618,7 @@ async def publish_carousel_by_ids(
     with Session(engine) as session:
         fresh = session.get(InstagramAccount, account_id)
         if not fresh:
-            raise _MissingResource("Account vanished mid-publish")
+            raise MissingResourceError("Account vanished mid-publish")
         ig_media_id = await publish_carousel(post_copies, fresh, caption, hashtags)
 
     posted_at = datetime.now(timezone.utc)
@@ -658,11 +658,11 @@ async def publish_stories_by_ids(
         for fpid in feed_post_ids:
             p = session.get(FeedPost, fpid)
             if not p:
-                raise _MissingResource(f"Feed post {fpid} not found")
+                raise MissingResourceError(f"Feed post {fpid} not found")
             post_copies.append(FeedPost(**p.model_dump()))
         account = session.get(InstagramAccount, account_id)
         if not account:
-            raise _MissingResource(f"Instagram account {account_id} not found")
+            raise MissingResourceError(f"Instagram account {account_id} not found")
 
     try:
         await refresh_token_if_needed(account)
@@ -676,7 +676,7 @@ async def publish_stories_by_ids(
             with Session(engine) as session:
                 fresh = session.get(InstagramAccount, account_id)
                 if not fresh:
-                    raise _MissingResource("Account vanished mid-publish")
+                    raise MissingResourceError("Account vanished mid-publish")
                 ig_media_id = await publish_story(post_copy, fresh)
 
             now = datetime.now(timezone.utc)

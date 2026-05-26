@@ -7,7 +7,7 @@ from app.database import engine
 from app.models import InstagramAccount, utcnow
 from app.services.instagram import (
     InstagramError,
-    _MissingResource,
+    MissingResourceError,
     publish_carousel_by_ids,
     publish_feed_post_by_id,
     publish_stories_by_ids,
@@ -89,7 +89,7 @@ async def publish_post(feed_post_id: str, body: dict):
             body.get("caption") or None,
             body.get("hashtags") or [],
         )
-    except _MissingResource as e:
+    except MissingResourceError as e:
         raise HTTPException(404, str(e))
     except InstagramError as e:
         raise _ig_error_to_http(e)
@@ -118,7 +118,7 @@ async def publish_carousel_endpoint(body: dict):
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    except _MissingResource as e:
+    except MissingResourceError as e:
         raise HTTPException(404, str(e))
     except InstagramError as e:
         raise _ig_error_to_http(e)
@@ -150,7 +150,7 @@ async def publish_stories_endpoint(body: dict):
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    except _MissingResource as e:
+    except MissingResourceError as e:
         raise HTTPException(404, str(e))
     except InstagramError as e:
         raise _ig_error_to_http(e)
